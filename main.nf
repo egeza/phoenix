@@ -125,16 +125,10 @@ workflow SRA {
     if (params.input_sra) {
         //create channel input
         ch_input = file(params.input_sra)
-        //Check that SRR numbers are passed not SRX
         if (ch_input) {
-            // Read the contents of the file
-            def sraNumbers = ch_input.text.readLines()
-            // Check each line in the file
-            for (sraNumber in sraNumbers) {
-                // Check if it starts with "SRR"
-                if (!sraNumber.startsWith("SRR")) {
-                    exit 1, "Invalid value in ${params.input_sra}. Only SRR numbers are allowed for -entry SRA, but found: $sraNumber"
-                }
+            def sraNumbers = ch_input.text.readLines().collect { it.trim() }.findAll { it }
+            if (!sraNumbers) {
+                exit 1, "Invalid value in ${params.input_sra}. The file is empty or contains only blank lines."
             }
         }
     } else { exit 1, 'For -entry SRA: Input samplesheet not specified! Make sure to use --input_sra NOT --input' }
@@ -176,16 +170,10 @@ workflow CDC_SRA {
     if (params.input_sra) {
         //create channel input
         ch_input = file(params.input_sra)
-        //Check that SRR numbers are passed not SRX
         if (ch_input) {
-            // Read the contents of the file
-            def sraNumbers = ch_input.text.readLines()
-            // Check each line in the file
-            for (sraNumber in sraNumbers) {
-                // Check if it starts with "SRR"
-                if (!sraNumber.startsWith("SRR")) {
-                    exit 1, "Invalid value in ${params.input_sra}. Only SRR numbers are allowed for -entry CDC_SRA, but found: $sraNumber"
-                }
+            def sraNumbers = ch_input.text.readLines().collect { it.trim() }.findAll { it }
+            if (!sraNumbers) {
+                exit 1, "Invalid value in ${params.input_sra}. The file is empty or contains only blank lines."
             }
         }
     } else { exit 1, 'For -entry CDC_SRA: Input samplesheet not specified! Make sure to use --input_sra NOT --input' }

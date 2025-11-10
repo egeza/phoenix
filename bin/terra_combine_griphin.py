@@ -116,21 +116,46 @@ def write_excel(output_file, df, set_coverage, phoenix, qc_max_col, ar_gene_coun
     workbook = writer.book
     (max_row, max_col) = df.shape # Get the dimensions of the dataframe.
     worksheet = writer.sheets['Sheet1']
+    def _apply_numeric_format(columns, excel_format):
+        for column in columns:
+            if column in df.columns:
+                col_idx = df.columns.get_loc(column)
+                start_cell = xl_rowcol_to_cell(2, col_idx)
+                end_cell = xl_rowcol_to_cell(max_row + 1, col_idx)
+                worksheet.conditional_format(f'{start_cell}:{end_cell}', {
+                    'type': 'cell',
+                    'criteria': 'not equal to',
+                    'value': '"Unknown"',
+                    'format': excel_format
+                })
+
     # Setting columns to numbers so you can have commas that make it more human readable
     number_comma_format = workbook.add_format({'num_format': '#,##0'})
-    # set formating for python 3.7.12
-    worksheet.conditional_format('O3:P' + str(max_row + 2), {'type': 'cell', 'criteria': 'not equal to', 'value': '"Unknown"', 'format': number_comma_format})
-    worksheet.conditional_format('J3:L' + str(max_row + 2), {'type': 'cell', 'criteria': 'not equal to', 'value': '"Unknown"', 'format': number_comma_format})
+    comma_columns = [
+        'Total_Raw_[reads]',
+        'Paired_Trimmed_[reads]',
+        'Total_Trimmed_[reads]',
+        'Scaffolds',
+        'Assembly_Length',
+        'N50',
+        'L50',
+        'Contigs_>=1Mbp'
+    ]
+    _apply_numeric_format(comma_columns, number_comma_format)
+
     # Setting columns to float so its more human readable
     number_dec_2_format = workbook.add_format({'num_format': '0.00'})
-    # set formating for python 3.7.12
-    worksheet.conditional_format('M3:N' + str(max_row + 2), {'type': 'cell', 'criteria': 'not equal to', 'value': '"Unknown"', 'format': number_dec_2_format})
-    worksheet.conditional_format('H3:I' + str(max_row + 2), {'type': 'cell', 'criteria': 'not equal to', 'value': '"Unknown"', 'format': number_dec_2_format})
-    worksheet.conditional_format('Q3:R' + str(max_row + 2), {'type': 'cell', 'criteria': 'not equal to', 'value': '"Unknown"', 'format': number_dec_2_format})
-    if phoenix == True:
-        worksheet.conditional_format('W3:X' + str(max_row + 2), {'type': 'cell', 'criteria': 'not equal to', 'value': '"Unknown"', 'format': number_dec_2_format})
-    else:
-        worksheet.conditional_format('Y3:Z' + str(max_row + 2), {'type': 'cell', 'criteria': 'not equal to', 'value': '"Unknown"', 'format': number_dec_2_format})
+    decimal_columns = [
+        'Raw_Q30_R1_[%]',
+        'Raw_Q30_R2_[%]',
+        'Estimated_Trimmed_Coverage',
+        'GC[%]',
+        'Assembly_Ratio',
+        'Assembly_StDev',
+        'FastANI_%ID',
+        'FastANI_%Coverage'
+    ]
+    _apply_numeric_format(decimal_columns, number_dec_2_format)
     # getting values to set column widths automatically
     for idx, col in enumerate(df):  # loop through all columns
         series = df[col]
@@ -152,16 +177,19 @@ def write_excel(output_file, df, set_coverage, phoenix, qc_max_col, ar_gene_coun
     cell_format_grey = workbook.add_format({'bg_color': '#AEB6BF', 'font_color': '#000000', 'bold': True})
     cell_format_darkgrey = workbook.add_format({'bg_color': '#808B96', 'font_color': '#000000', 'bold': True})
     # Headers
-    worksheet.merge_range('A1:C1', "PHoeNIx Summary", cell_format_light_blue)
-    worksheet.merge_range('D1:R1', "QC Metrics", cell_format_grey_blue)
-    if phoenix == True: #for non-CDC entry points
-        worksheet.merge_range('S1:Y1', "Taxonomic Information", cell_format_green)
-    else:
-        worksheet.merge_range('S1:AA1', "Taxonomic Information", cell_format_green)
-    if phoenix == True: #for non-CDC entry points
-        worksheet.merge_range('Z1:AG1', "MLST Schemes", cell_format_green_blue)
-    else:
-        worksheet.merge_range('AB1:AI1', "MLST Schemes", cell_format_green_blue)
+    summary_end_col = df.columns.get_loc('Data_Location')
+    qc_start_col = summary_end_col + 1
+    tax_start_col = df.columns.get_loc('Taxa_Source')
+    mlst_start_col = df.columns.get_loc('Primary_MLST_Scheme')
+    qc_end_col = tax_start_col - 1
+    tax_end_col = mlst_start_col - 1
+    mlst_end_col = df.columns.get_loc('Secondary_MLST_Alleles')
+
+    worksheet.merge_range(0, 0, 0, summary_end_col, "PHoeNIx Summary", cell_format_light_blue)
+    if qc_start_col <= qc_end_col:
+        worksheet.merge_range(0, qc_start_col, 0, qc_end_col, "QC Metrics", cell_format_grey_blue)
+    worksheet.merge_range(0, tax_start_col, 0, tax_end_col, "Taxonomic Information", cell_format_green)
+    worksheet.merge_range(0, mlst_start_col, 0, mlst_end_col, "MLST Schemes", cell_format_green_blue)
     worksheet.merge_range(0, qc_max_col, 0, (qc_max_col + ar_gene_count - 1), "Antibiotic Resistance Genes", cell_format_lightgrey)
     worksheet.merge_range(0, (qc_max_col + ar_gene_count), 0 ,(qc_max_col + ar_gene_count + hv_gene_count - 1), "Hypervirulence Genes^^", cell_format_grey)
     worksheet.merge_range(0, (qc_max_col + ar_gene_count + hv_gene_count), 0, (qc_max_col + ar_gene_count + pf_gene_count + hv_gene_count - 1), "Plasmid Incompatibility Replicons^^^", cell_format_darkgrey)
@@ -175,10 +203,16 @@ def write_excel(output_file, df, set_coverage, phoenix, qc_max_col, ar_gene_coun
     orange_format.set_border(1) # add back border so it matches the rest of the column names
     orange_format_nb = workbook.add_format({'bg_color': '#F5CBA7', 'font_color': '#000000', 'bold': False})
     # Apply a conditional format for checking coverage is between set_coverage-100 in estimated coverage column. adding 2 to max row to account for headers
-    worksheet.conditional_format('M3:M' + str(max_row + 2), {'type': 'cell', 'criteria': '<', 'value':  str(set_coverage), 'format': yellow_format})
-    worksheet.conditional_format('M3:M' + str(max_row + 2), {'type': 'cell', 'criteria': '>', 'value':  100.00, 'format': yellow_format})
+    if 'Estimated_Trimmed_Coverage' in df.columns:
+        coverage_idx = df.columns.get_loc('Estimated_Trimmed_Coverage')
+        coverage_range = f"{xl_rowcol_to_cell(2, coverage_idx)}:{xl_rowcol_to_cell(max_row + 1, coverage_idx)}"
+        worksheet.conditional_format(coverage_range, {'type': 'cell', 'criteria': '<', 'value':  str(set_coverage), 'format': yellow_format})
+        worksheet.conditional_format(coverage_range, {'type': 'cell', 'criteria': '>', 'value':  100.00, 'format': yellow_format})
     # Apply a conditional format for auto pass/fail in Auto_PassFail coverage column.
-    worksheet.conditional_format('D3:D' + str(max_row + 2), {'type': 'cell', 'criteria': 'equal to', 'value':  '"FAIL"', 'format': red_format})
+    if 'Minimum_QC_Check' in df.columns:
+        qc_idx = df.columns.get_loc('Minimum_QC_Check')
+        qc_range = f"{xl_rowcol_to_cell(2, qc_idx)}:{xl_rowcol_to_cell(max_row + 1, qc_idx)}"
+        worksheet.conditional_format(qc_range, {'type': 'cell', 'criteria': 'equal to', 'value':  '"FAIL"', 'format': red_format})
     # conditional formating to highlight big 5 genes
     # Start iterating through the columns and the rows to apply the format
     column_count = 0

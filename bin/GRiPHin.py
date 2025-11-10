@@ -136,33 +136,52 @@ def get_kraken_info(kraken_trim, kraken_wtasmbld, sample_name):
         scheme_guess_kraken_wt = ""
     return Trim_kraken, Trim_Genus_percent, Asmbld_kraken, Asmbld_Genus_percent, Trim_unclassified_percent, Asmbld_unclassified_percent, scheme_guess_kraken_wt, scheme_guess_kraken_trimd
 
-def Calculate_Trim_Coverage(Total_Trimmed_bp, quast_report):
-    """Taking the total sequenced bp from fastp and the assembly length from quast to calculate coverage."""
-    with open(quast_report, 'r') as f:
-        for line in f:
-            if ('Total length' in line):
-                Assembly_Length = int(line.split('\t')[1])
-                break
-    Coverage = float(round(Total_Trimmed_bp / Assembly_Length, 2))
-    return Coverage, Assembly_Length
+def _safe_int(value):
+    """Attempt to coerce a QUAST metric value to an integer, otherwise return 'Unknown'."""
+    try:
+        cleaned = str(value).replace(',', '')
+        return int(float(cleaned))
+    except (ValueError, TypeError):
+        return 'Unknown'
 
-def Get_Assembly_Length(quast_report): #for -entry SCAFFOLDS or CDC_SCAFFOLDS
-    """Taking the the assembly length from quast to get assembly length."""
+def extract_quast_metrics(quast_report):
+    """Parse QUAST summary TSV and return key assembly metrics."""
+    metrics = {
+        'assembly_length': 'Unknown',
+        'scaffold_count': 'Unknown',
+        'n50': 'Unknown',
+        'l50': 'Unknown',
+        'contigs_ge_1mb': 'Unknown'
+    }
     with open(quast_report, 'r') as f:
-        for line in f:
-            if ('Total length' in line):
-                Assembly_Length = int(line.split('\t')[1])
-                break
-    return Assembly_Length
+        for raw_line in f:
+            line = raw_line.strip()
+            if not line or line.startswith('#'):
+                continue
+            parts = line.split('\t')
+            if len(parts) < 2:
+                continue
+            key = parts[0].strip()
+            value = parts[1].strip()
+            if key.startswith('Total length'):
+                metrics['assembly_length'] = _safe_int(value)
+            elif key.startswith('# contigs (>= 0 bp)'):
+                metrics['scaffold_count'] = _safe_int(value)
+            elif key == 'N50':
+                metrics['n50'] = _safe_int(value)
+            elif key == 'L50':
+                metrics['l50'] = _safe_int(value)
+            elif key.startswith('# contigs (>= 1000000 bp)'):
+                metrics['contigs_ge_1mb'] = _safe_int(value)
+    return metrics
 
-def get_scaffold_count(quast_report):
-    scaffolds = '0'
-    with open(quast_report, 'r') as f:
-        for line in f:
-            if ('# contigs (>= 0 bp)' in line):
-                scaffolds = int(line.split()[-1])
-                break
-    return scaffolds
+def Calculate_Trim_Coverage(total_trimmed_bp, assembly_length):
+    """Calculate coverage given total trimmed base pairs and assembly length."""
+    try:
+        coverage = float(round(total_trimmed_bp / assembly_length, 2))
+    except (TypeError, ZeroDivisionError):
+        coverage = 'Unknown'
+    return coverage
 
 def Get_BUSCO_Gene_Count(busco_short_summary):
     """Parse BUSCO file to get the lineage and % of matching BUSCOs"""
@@ -711,21 +730,25 @@ def Get_Metrics(phoenix_entry, scaffolds_entry, set_coverage, srst2_ar_df, pf_df
     # Try and except are in the get_kraken_info function to allow for cases where trimming was completed, but not assembly
     Trim_kraken, Trim_Genus_percent, Asmbld_kraken, Asmbld_Genus_percent, Trim_unclassified_percent, Wt_asmbld_unclassified_percent, scheme_guess_kraken_wt, scheme_guess_kraken_trimd = get_kraken_info(kraken_trim, kraken_wtasmbld, sample_name)
     try:
-        if Total_Trimmed_bp != "Unknown": # for -entry CDC_SCAFFOLDS where no reads are present to calculate. For all other scenerios run this portion
-            Coverage, Assembly_Length = Calculate_Trim_Coverage(Total_Trimmed_bp, quast_report)
-        elif Total_Trimmed_bp == "Unknown": # for -entry CDC_SCAFFOLDS and -entry SCAFFOLDS
-            Assembly_Length = Get_Assembly_Length(quast_report)
-            Coverage = 'Unknown'
-        else:
-            Coverage = Assembly_Length = 'Unknown'
+        quast_metrics = extract_quast_metrics(quast_report)
     except FileNotFoundError:
         print("Warning: " + sample_name + "_summary.tsv not found")
-        Coverage = Assembly_Length = 'Unknown'
-    try:
-        Scaffold_Count = get_scaffold_count(quast_report)
-    except FileNotFoundError:
-        print("Warning: " + sample_name + "_summary.tsv not found")
-        Scaffold_Count = 'Unknown'
+        quast_metrics = {
+            'assembly_length': 'Unknown',
+            'scaffold_count': 'Unknown',
+            'n50': 'Unknown',
+            'l50': 'Unknown',
+            'contigs_ge_1mb': 'Unknown'
+        }
+    Assembly_Length = quast_metrics['assembly_length']
+    N50 = quast_metrics['n50']
+    L50 = quast_metrics['l50']
+    Contigs_1Mbp = quast_metrics['contigs_ge_1mb']
+    Scaffold_Count = quast_metrics['scaffold_count']
+    if Total_Trimmed_bp != "Unknown" and isinstance(Assembly_Length, int) and Assembly_Length > 0:
+        Coverage = Calculate_Trim_Coverage(Total_Trimmed_bp, Assembly_Length)
+    else:
+        Coverage = 'Unknown'
     try:
         busco_metrics = Get_BUSCO_Gene_Count(busco_short_summary)
     except FileNotFoundError:
@@ -862,7 +885,7 @@ def Get_Metrics(phoenix_entry, scaffolds_entry, set_coverage, srst2_ar_df, pf_df
                                     genus, fastani_warning, busco_metrics[1], FastANI_output_list[1], FastANI_output_list[2], srst2_warning)
     except:
         warnings = ""
-    return srst2_ar_df, pf_df, ar_df, hv_df, Q30_R1_per, Q30_R2_per, Total_Raw_Seq_bp, Total_Raw_reads, Paired_Trimmed_reads, Total_Trimmed_reads, Trim_kraken, Asmbld_kraken, Coverage, Assembly_Length, FastANI_output_list, warnings, alerts, \
+    return srst2_ar_df, pf_df, ar_df, hv_df, Q30_R1_per, Q30_R2_per, Total_Raw_Seq_bp, Total_Raw_reads, Paired_Trimmed_reads, Total_Trimmed_reads, Trim_kraken, Asmbld_kraken, Coverage, Assembly_Length, N50, L50, Contigs_1Mbp, FastANI_output_list, warnings, alerts, \
     Scaffold_Count, busco_metrics, gc_metrics, assembly_ratio_metrics, QC_result, QC_reason, MLST_scheme_1, MLST_scheme_2, MLST_type_1, MLST_type_2, MLST_alleles_1, MLST_alleles_2, MLST_source_1, MLST_source_2
 
 def Get_Files(directory, sample_name):
@@ -916,9 +939,9 @@ def Get_Files(directory, sample_name):
         srst2_file = directory + "/srst2/" + sample_name + "__fullgenes__blank_srst2__results.txt"
     return trim_stats, raw_stats, kraken_trim, kraken_trim_report, kraken_wtasmbld_report, kraken_wtasmbld, quast_report, mlst_file, fairy_file, busco_short_summary, asmbld_ratio, gc, gamma_ar_file, gamma_pf_file, gamma_hv_file, fast_ani_file, tax_file, srst2_file
 
-def Append_Lists(data_location, parent_folder, sample_name, Q30_R1_per, Q30_R2_per, Total_Raw_Seq_bp, Total_Seq_reads, Paired_Trimmed_reads, Total_trim_Seq_reads, Trim_kraken, Asmbld_kraken, Coverage, Assembly_Length, FastANI_output_list, warnings, alerts, \
+def Append_Lists(data_location, parent_folder, sample_name, Q30_R1_per, Q30_R2_per, Total_Raw_Seq_bp, Total_Seq_reads, Paired_Trimmed_reads, Total_trim_Seq_reads, Trim_kraken, Asmbld_kraken, Coverage, Assembly_Length, N50, L50, Contigs_1Mbp, FastANI_output_list, warnings, alerts, \
             Scaffold_Count, busco_metrics, gc_metrics, assembly_ratio_metrics, QC_result, QC_reason, MLST_scheme_1, MLST_scheme_2, MLST_type_1, MLST_type_2, MLST_alleles_1, MLST_alleles_2, MLST_source_1, MLST_source_2, \
-            data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L,Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L, \
+            data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L,Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, N50_L, L50_L, Contigs_1Mb_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L, \
             Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L, MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L):
         data_location_L.append(data_location)
         parent_folder_L.append(parent_folder)
@@ -933,6 +956,9 @@ def Append_Lists(data_location, parent_folder, sample_name, Q30_R1_per, Q30_R2_p
         Asmbld_kraken_L.append(Asmbld_kraken)
         Coverage_L.append(Coverage)
         Assembly_Length_L.append(Assembly_Length)
+        N50_L.append(N50)
+        L50_L.append(L50)
+        Contigs_1Mb_L.append(Contigs_1Mbp)
         Species_Support_L.append(FastANI_output_list[0])
         fastani_organism_L.append(FastANI_output_list[3])
         fastani_ID_L.append(FastANI_output_list[1])
@@ -956,10 +982,10 @@ def Append_Lists(data_location, parent_folder, sample_name, Q30_R1_per, Q30_R2_p
         MLST_alleles_2_L.append(MLST_alleles_2)
         MLST_source_1_L.append(MLST_source_1)
         MLST_source_2_L.append(MLST_source_2)
-        return data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L, \
+        return data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, N50_L, L50_L, Contigs_1Mb_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L, \
         Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L, MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L
 
-def Create_df(phoenix, data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L,
+def Create_df(phoenix, data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, N50_L, L50_L, Contigs_1Mb_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L,
 Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L, MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L):
     #combine all metrics into a dataframe
     if phoenix == True:
@@ -980,6 +1006,9 @@ Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, asse
         'GC[%]'                      : gc_L,
         'Scaffolds'                  : Scaffold_Count_L,
         'Assembly_Length'            : Assembly_Length_L,
+        'N50'                        : N50_L,
+        'L50'                        : L50_L,
+        'Contigs_>=1Mbp'             : Contigs_1Mb_L,
         'Assembly_Ratio'             : assembly_ratio_L,
         'Assembly_StDev'             : assembly_stdev_L,
         'Taxa_Source'                : tax_method_L,
@@ -1015,6 +1044,9 @@ Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, asse
         'GC[%]'                      : gc_L,
         'Scaffolds'                  : Scaffold_Count_L,
         'Assembly_Length'            : Assembly_Length_L,
+        'N50'                        : N50_L,
+        'L50'                        : L50_L,
+        'Contigs_>=1Mbp'             : Contigs_1Mb_L,
         'Assembly_Ratio'             : assembly_ratio_L,
         'Assembly_StDev'             : assembly_stdev_L,
         'Taxa_Source'                : tax_method_L,
@@ -1168,30 +1200,46 @@ def write_to_excel(set_coverage, output, df, qc_max_col, ar_gene_count, pf_gene_
     workbook = writer.book
     (max_row, max_col) = df.shape # Get the dimensions of the dataframe.
     worksheet = writer.sheets['Sheet1']
+    def _apply_numeric_format(columns, excel_format):
+        for column in columns:
+            if column in df.columns:
+                col_idx = df.columns.get_loc(column)
+                start_cell = xl_rowcol_to_cell(2, col_idx)
+                end_cell = xl_rowcol_to_cell(max_row + 1, col_idx)
+                worksheet.conditional_format(f'{start_cell}:{end_cell}', {
+                    'type': 'cell',
+                    'criteria': 'not equal to',
+                    'value': '"Unknown"',
+                    'format': excel_format
+                })
+
     # Setting columns to numbers so you can have commas that make it more human readable
     number_comma_format = workbook.add_format({'num_format': '#,##0'})
-    ##worksheet.set_column('H:J', None, number_comma_format) # Total_seqs (raw and trimmed) Total_bp - use when python is >3.7.12
-    ##worksheet.set_column('M:N', None, number_comma_format) # scaffolds and assembly_length - use when python is >3.7.12
-    # set formating for python 3.7.12
-    worksheet.conditional_format('O3:P' + str(max_row + 2), {'type': 'cell', 'criteria': 'not equal to', 'value': '"Unknown"', 'format': number_comma_format})
-    worksheet.conditional_format('J3:L' + str(max_row + 2), {'type': 'cell', 'criteria': 'not equal to', 'value': '"Unknown"', 'format': number_comma_format})
+    comma_columns = [
+        'Total_Raw_[reads]',
+        'Paired_Trimmed_[reads]',
+        'Total_Trimmed_[reads]',
+        'Scaffolds',
+        'Assembly_Length',
+        'N50',
+        'L50',
+        'Contigs_>=1Mbp'
+    ]
+    _apply_numeric_format(comma_columns, number_comma_format)
+
     # Setting columns to float so its more human readable
-    #number_dec_format = workbook.add_format({'num_format': '0.000'})
-    #number_dec_format.set_align('left') - agh not working
     number_dec_2_format = workbook.add_format({'num_format': '0.00'})
-    ##worksheet.set_column('K:L', None, number_dec_2_format) # Estimated_Trimmed_Coverage and GC% - use when python is >3.7.12
-    ##worksheet.set_column('F:G', None, number_dec_2_format) # Q30%s - use when python is >3.7.12
-    ##worksheet.set_column('O:P', None, number_dec_2_format) # Assembly Ratio and StDev - use when python is >3.7.12
-    # set formating for python 3.7.12
-    worksheet.conditional_format('M3:N' + str(max_row + 2), {'type': 'cell', 'criteria': 'not equal to', 'value': '"Unknown"', 'format': number_dec_2_format})
-    worksheet.conditional_format('H3:I' + str(max_row + 2), {'type': 'cell', 'criteria': 'not equal to', 'value': '"Unknown"', 'format': number_dec_2_format})
-    worksheet.conditional_format('Q3:R' + str(max_row + 2), {'type': 'cell', 'criteria': 'not equal to', 'value': '"Unknown"', 'format': number_dec_2_format})
-    if phoenix == True:
-        worksheet.conditional_format('W3:X' + str(max_row + 2), {'type': 'cell', 'criteria': 'not equal to', 'value': '"Unknown"', 'format': number_dec_2_format})
-        #worksheet.set_column('U:V', None, number_dec_2_format) # FastANI ID and Coverage
-    else:
-        worksheet.conditional_format('Y3:Z' + str(max_row + 2), {'type': 'cell', 'criteria': 'not equal to', 'value': '"Unknown"', 'format': number_dec_2_format})
-        #worksheet.set_column('W:X', None, number_dec_2_format) # FastANI ID and Coverage
+    decimal_columns = [
+        'Raw_Q30_R1_[%]',
+        'Raw_Q30_R2_[%]',
+        'Estimated_Trimmed_Coverage',
+        'GC[%]',
+        'Assembly_Ratio',
+        'Assembly_StDev',
+        'FastANI_%ID',
+        'FastANI_%Coverage'
+    ]
+    _apply_numeric_format(decimal_columns, number_dec_2_format)
     # getting values to set column widths automatically
     for idx, col in enumerate(df):  # loop through all columns
         series = df[col]
@@ -1213,19 +1261,19 @@ def write_to_excel(set_coverage, output, df, qc_max_col, ar_gene_count, pf_gene_
     cell_format_grey = workbook.add_format({'bg_color': '#AEB6BF', 'font_color': '#000000', 'bold': True})
     cell_format_darkgrey = workbook.add_format({'bg_color': '#808B96', 'font_color': '#000000', 'bold': True})
     # Headers
-    #worksheet.set_column('', "PHoeNIx Summary", cell_format_light_blue)
-    #worksheet.write('A1', "PHoeNIx Summary") #use for only 1 column in length
-    #worksheet.set_column('A1:A1', None, cell_format_light_blue) #make summary column blue, #use for only 1 column in length
-    worksheet.merge_range('A1:C1', "PHoeNIx Summary", cell_format_light_blue)
-    worksheet.merge_range('D1:R1', "QC Metrics", cell_format_grey_blue)
-    if phoenix == True: #for non-CDC entry points
-        worksheet.merge_range('S1:Y1', "Taxonomic Information", cell_format_green)
-    else:
-        worksheet.merge_range('S1:AA1', "Taxonomic Information", cell_format_green)
-    if phoenix == True: #for non-CDC entry points
-        worksheet.merge_range('Z1:AG1', "MLST Schemes", cell_format_green_blue)
-    else:
-        worksheet.merge_range('AB1:AI1', "MLST Schemes", cell_format_green_blue)
+    summary_end_col = df.columns.get_loc('Data_Location')
+    qc_start_col = summary_end_col + 1
+    tax_start_col = df.columns.get_loc('Taxa_Source')
+    mlst_start_col = df.columns.get_loc('Primary_MLST_Scheme')
+    qc_end_col = tax_start_col - 1
+    tax_end_col = mlst_start_col - 1
+    mlst_end_col = df.columns.get_loc('Secondary_MLST_Alleles')
+
+    worksheet.merge_range(0, 0, 0, summary_end_col, "PHoeNIx Summary", cell_format_light_blue)
+    if qc_start_col <= qc_end_col:
+        worksheet.merge_range(0, qc_start_col, 0, qc_end_col, "QC Metrics", cell_format_grey_blue)
+    worksheet.merge_range(0, tax_start_col, 0, tax_end_col, "Taxonomic Information", cell_format_green)
+    worksheet.merge_range(0, mlst_start_col, 0, mlst_end_col, "MLST Schemes", cell_format_green_blue)
     worksheet.merge_range(0, qc_max_col, 0, (qc_max_col + ar_gene_count - 1), "Antibiotic Resistance Genes", cell_format_lightgrey)
     worksheet.merge_range(0, (qc_max_col + ar_gene_count), 0 ,(qc_max_col + ar_gene_count + hv_gene_count - 1), "Hypervirulence Genes^^", cell_format_grey)
     worksheet.merge_range(0, (qc_max_col + ar_gene_count + hv_gene_count), 0, (qc_max_col + ar_gene_count + pf_gene_count + hv_gene_count - 1), "Plasmid Incompatibility Replicons^^^", cell_format_darkgrey)
@@ -1239,10 +1287,16 @@ def write_to_excel(set_coverage, output, df, qc_max_col, ar_gene_count, pf_gene_
     orange_format.set_border(1) # add back border so it matches the rest of the column names
     orange_format_nb = workbook.add_format({'bg_color': '#F5CBA7', 'font_color': '#000000', 'bold': False})
     # Apply a conditional format for checking coverage is between set_coverage-100 in estimated coverage column. adding 2 to max row to account for headers
-    worksheet.conditional_format('M3:M' + str(max_row + 2), {'type': 'cell', 'criteria': '<', 'value':  str(set_coverage), 'format': yellow_format})
-    worksheet.conditional_format('M3:M' + str(max_row + 2), {'type': 'cell', 'criteria': '>', 'value':  100.00, 'format': yellow_format})
+    if 'Estimated_Trimmed_Coverage' in df.columns:
+        coverage_idx = df.columns.get_loc('Estimated_Trimmed_Coverage')
+        coverage_range = f"{xl_rowcol_to_cell(2, coverage_idx)}:{xl_rowcol_to_cell(max_row + 1, coverage_idx)}"
+        worksheet.conditional_format(coverage_range, {'type': 'cell', 'criteria': '<', 'value':  str(set_coverage), 'format': yellow_format})
+        worksheet.conditional_format(coverage_range, {'type': 'cell', 'criteria': '>', 'value':  100.00, 'format': yellow_format})
     # Apply a conditional format for auto pass/fail in Auto_PassFail coverage column.
-    worksheet.conditional_format('D3:D' + str(max_row + 2), {'type': 'cell', 'criteria': 'equal to', 'value':  '"FAIL"', 'format': red_format})
+    if 'Minimum_QC_Check' in df.columns:
+        qc_idx = df.columns.get_loc('Minimum_QC_Check')
+        qc_range = f"{xl_rowcol_to_cell(2, qc_idx)}:{xl_rowcol_to_cell(max_row + 1, qc_idx)}"
+        worksheet.conditional_format(qc_range, {'type': 'cell', 'criteria': 'equal to', 'value':  '"FAIL"', 'format': red_format})
     # conditional formating to highlight big 5 genes
     # Start iterating through the columns and the rows to apply the format
     column_count = 0
@@ -1350,8 +1404,8 @@ def convert_excel_to_tsv(output):
 def main():
     args = parseArgs()
     # create empty lists to append to later
-    Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, Species_Support_L, Scaffold_Count_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L, \
-    busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L, MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L, data_location_L, parent_folder_L= ([] for i in range(36))
+    Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, N50_L, L50_L, Contigs_1Mb_L, Species_Support_L, Scaffold_Count_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L, \
+    busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L, MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L, data_location_L, parent_folder_L = ([] for i in range(39))
     ar_df = pd.DataFrame() #create empty dataframe to fill later for AR genes
     pf_df = pd.DataFrame() #create another empty dataframe to fill later for Plasmid markers
     hv_df = pd.DataFrame() #create another empty dataframe to fill later for hypervirulence genes
@@ -1377,17 +1431,17 @@ def main():
             data_location, parent_folder = Get_Parent_Folder(directory)
             trim_stats, raw_stats, kraken_trim, kraken_trim_report, kraken_wtasmbld_report, kraken_wtasmbld, quast_report, mlst_file, fairy_file, busco_short_summary, asmbld_ratio, gc, gamma_ar_file, gamma_pf_file, gamma_hv_file, fast_ani_file, tax_file, srst2_file = Get_Files(directory, sample_name)
             #Get the metrics for the sample
-            srst2_ar_df, pf_df, ar_df, hv_df, Q30_R1_per, Q30_R2_per, Total_Raw_Seq_bp, Total_Seq_reads, Paired_Trimmed_reads, Total_trim_Seq_reads, Trim_kraken, Asmbld_kraken, Coverage, Assembly_Length, FastANI_output_list, warnings, alerts, Scaffold_Count, busco_metrics, gc_metrics, assembly_ratio_metrics, QC_result, \
+            srst2_ar_df, pf_df, ar_df, hv_df, Q30_R1_per, Q30_R2_per, Total_Raw_Seq_bp, Total_Seq_reads, Paired_Trimmed_reads, Total_trim_Seq_reads, Trim_kraken, Asmbld_kraken, Coverage, Assembly_Length, N50, L50, Contigs_1Mbp, FastANI_output_list, warnings, alerts, Scaffold_Count, busco_metrics, gc_metrics, assembly_ratio_metrics, QC_result, \
             QC_reason, MLST_scheme_1, MLST_scheme_2, MLST_type_1, MLST_type_2, MLST_alleles_1, MLST_alleles_2, MLST_source_1, MLST_source_2 = Get_Metrics(args.phoenix, args.scaffolds, args.set_coverage, srst2_ar_df, pf_df, ar_df, hv_df, trim_stats, raw_stats, kraken_trim, kraken_trim_report, kraken_wtasmbld_report, kraken_wtasmbld, quast_report, busco_short_summary, asmbld_ratio, gc, sample_name, mlst_file, fairy_file, gamma_ar_file, gamma_pf_file, gamma_hv_file, fast_ani_file, tax_file, srst2_file, ar_dic)
             #Collect this mess of variables into appeneded lists
-            data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L , alerts_L, \
+            data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, N50_L, L50_L, Contigs_1Mb_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L , alerts_L, \
             Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L , MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L = Append_Lists(data_location, parent_folder, sample_name, \
-            Q30_R1_per, Q30_R2_per, Total_Raw_Seq_bp, Total_Seq_reads, Paired_Trimmed_reads, Total_trim_Seq_reads, Trim_kraken, Asmbld_kraken, Coverage, Assembly_Length, FastANI_output_list, warnings, alerts, Scaffold_Count, busco_metrics, \
+            Q30_R1_per, Q30_R2_per, Total_Raw_Seq_bp, Total_Seq_reads, Paired_Trimmed_reads, Total_trim_Seq_reads, Trim_kraken, Asmbld_kraken, Coverage, Assembly_Length, N50, L50, Contigs_1Mbp, FastANI_output_list, warnings, alerts, Scaffold_Count, busco_metrics, \
             gc_metrics, assembly_ratio_metrics, QC_result, QC_reason, MLST_scheme_1, MLST_scheme_2, MLST_type_1, MLST_type_2, MLST_alleles_1, MLST_alleles_2, MLST_source_1, MLST_source_2, \
-            data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L, \
+            data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, N50_L, L50_L, Contigs_1Mb_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L, \
             Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L, MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L)
     # combine all lists into a dataframe
-    df = Create_df(args.phoenix, data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L, \
+    df = Create_df(args.phoenix, data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, N50_L, L50_L, Contigs_1Mb_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L, \
     Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L , MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L)
     (qc_max_row, qc_max_col) = df.shape
     pf_max_col = pf_df.shape[1] - 1 #remove one for the WGS_ID column

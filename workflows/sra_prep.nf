@@ -17,6 +17,7 @@ def summary_params = NfcoreSchema.paramsSummaryMap(workflow, params)
 //
 
 include { CREATE_SRA_SAMPLESHEET         } from '../modules/local/create_sra_samplesheet'
+include { RESOLVE_SRA_ACCESSIONS         } from '../modules/local/resolve_sra_accessions'
 include { SRATOOLS_PREFETCH              } from '../modules/local/sratools/prefetch'
 include { SRATOOLS_FASTERQDUMP           } from '../modules/local/sratools/fasterq'
 include { ENTREZDIRECT_ESEARCH           } from '../modules/local/get_sra_metadata'
@@ -43,12 +44,28 @@ workflow SRA_PREP {
     main:
         ch_versions = Channel.empty() // Used to collect the software versions
         outdir_path = Channel.fromPath(params.outdir, relative: true)
-        // slipt samplesheet to have one SRR come out at a time
-        sra_id_ch = Channel.from(sra_samplesheet).splitCsv()
+        // Split samplesheet entries, trim whitespace, and discard blanks
+        sra_accession_ch = Channel
+            .from(sra_samplesheet)
+            .splitCsv()
+            .map { row -> row ? row[0]?.toString()?.trim() : null }
+            .filter { it }
 
-    // Fetch .sra data for each SRR number
+        // Resolve each accession to one or more run identifiers
+        RESOLVE_SRA_ACCESSIONS (
+            sra_accession_ch
+        )
+        ch_versions = ch_versions.mix(RESOLVE_SRA_ACCESSIONS.out.versions)
+
+        resolved_run_ch = RESOLVE_SRA_ACCESSIONS.out.run_ids
+            .map { it.trim() }
+            .filter { it }
+            .unique()
+            .map { [ it ] }
+
+    // Fetch .sra data for each run identifier
     SRATOOLS_PREFETCH (
-        sra_id_ch
+        resolved_run_ch
     )
     ch_versions = ch_versions.mix(SRATOOLS_PREFETCH.out.versions)
 
@@ -61,7 +78,7 @@ workflow SRA_PREP {
     )
     ch_versions = ch_versions.mix(SRATOOLS_FASTERQDUMP.out.versions)
 
-    // Getting the metadata csv file for each SRR to get sample name
+    // Getting the metadata csv file for each SRA run accession to get sample name
     ENTREZDIRECT_ESEARCH (
         sra_folder_ch
     )
@@ -70,7 +87,7 @@ workflow SRA_PREP {
     // First, create channel with reads and metadata in it and make sure the right metadata goes with the right reads
     combined_sra_ch = SRATOOLS_FASTERQDUMP.out.reads.join(ENTREZDIRECT_ESEARCH.out.metadata_csv, by: [0])
 
-    // Figuring out if we should use SRR or sample names
+    // Figuring out if we should use the run accession or sample names
     CONFIRM_DUPS (
         combined_sra_ch, ENTREZDIRECT_ESEARCH.out.metadata_csv
     )

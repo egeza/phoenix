@@ -1,7 +1,7 @@
 process QUAST {
     tag "$meta.id"
     label 'process_low'
-    container 'staphb/quast:5.0.2'
+    container 'staphb/quast:latest'
 
     input:
     tuple val(meta), path(consensus), val(fairy_outcome)

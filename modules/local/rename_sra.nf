@@ -8,16 +8,16 @@ process RENAME_SRA_FASTA {
     tuple val(meta), path(reads)
 
     output:
-    path("*_R*_001.fastq.gz"), emit: renamed_reads // we don't want the SRR.fastq just the forward and reverse
+    path("*_R*_001.fastq.gz"), emit: renamed_reads // we don't want the accession.fastq just the forward and reverse
     path("versions.yml"),      emit: versions
 
     script:
-    def srr_num = reads[0].toString() - "_1.fastq.gz" // this is the SRR number
+    def run_accession = reads[0].toString() - "_1.fastq.gz" // this is the SRA run accession (SRR/ERR/DRR/etc.)
     def container_version = "base_v2.1.0"
     def container = task.container.toString() - "quay.io/jvhagey/phoenix@"
     """
-    mv ${srr_num}_1.fastq.gz ${meta.id}_R1_001.fastq.gz
-    mv ${srr_num}_2.fastq.gz ${meta.id}_R2_001.fastq.gz
+    mv ${run_accession}_1.fastq.gz ${meta.id}_R1_001.fastq.gz
+    mv ${run_accession}_2.fastq.gz ${meta.id}_R2_001.fastq.gz
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

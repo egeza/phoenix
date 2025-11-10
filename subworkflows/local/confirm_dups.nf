@@ -26,11 +26,11 @@ workflow CONFIRM_DUPS {
 def create_deduped_ch(old_meta, reads, metadata_csv, dups){
     if (dups == "no") { // There are no duplicate sample names so use those for the meta
         // Create tuple with sample name in it for the tag in RENAME_SRA_FASTA
-        // function is used to swap out SRR meta.id for the sample name from SRA
+        // function is used to swap out the run accession meta.id for the sample name from SRA
         def meta = [:] // create meta array
         meta.id = metadata_csv.readLines().get(1).split(',')[29].replaceAll(" ", "_").replaceAll("/", "_") // This gives the metadata sample name from the SRA, also some clean up
         output_array = [ meta, reads]
-    } else {// There are duplicate sample names so use SRR number for naming
+    } else {// There are duplicate sample names so use run accession for naming
         // Just drop metadata_csv from the channel
         output_array = [ old_meta, reads]
     }

@@ -80,8 +80,8 @@ read=$(zcat "${fname}" | head --lines 1 | grep -oP "[1-2]:[NY]:" | cut -f1 -d":"
 #if the above line didn't capture the read number try some other options
 if [[ "$read" != "R1" ]] && [[ "$read" != "R2" ]]; then
 	echo "read orientation not captured trying another method."
-	#get read number - if SRR in name remove that as it will conflict with getting R1/R2 from string.
-	read=$(echo "${full_name}" | sed -e 's/SRR//' | grep -oP '(?<![a-zA-Z0-9])R[12](?![a-zA-Z0-9])' | tail -1)
+	#get read number - if an SRA run accession (e.g., SRR/ERR/DRR/CRR) is in the name remove it so we can capture the trailing R1/R2.
+	read=$(echo "${full_name}" | sed -E 's/^(SRR|ERR|DRR|CRR)//' | grep -oP '(?<![a-zA-Z0-9])R[12](?![a-zA-Z0-9])' | tail -1)
 	# handing for cases with _1.fastq.gz or _2.fastq.gz 
 	if [[ "$read" != "R1" ]] && [[ "$read" != "R2" ]]; then
 		#ensures that there is no letter or number immediately before or after the match.
