@@ -65,6 +65,15 @@ Note that this command clones (downloading) the repo to `~/.nextflow/assets/cdcg
     nextflow run cdcgov/phoenix -r v2.0.0 -profile <singularity/docker/custom> -entry PHOENIX --input <path_to_samplesheet.csv> --kraken2db $PATH_TO_DB
     ```
 
+    **SRA inputs:** When running `-entry SRA` or `-entry CDC_SRA`, you can now provide either run accessions (`SRR*`, `ERR*`, `DRR*`, `CRR*`) or higher-level accessions such as BioProject IDs. The workflow resolves those inputs to the underlying run IDs before downloading data. Pass `--use_sra` if you prefer to retain the run accession in downstream filenames.
+
+    **Container updates:** SRA fetching and assembly QC rely on community-maintained images:
+
+    - `benpasto/sratools:latest` for `prefetch` / `fasterq-dump`
+    - `staphb/quast:latest` for QUAST
+
+    Ensure your environment can pull these images (or mirror them internally) when running the SRA entry points.
+
 # CDCgov GitHub Organization Open Source Project
 
 **General disclaimer** This repository was created for use by CDC programs to collaborate on public health related projects in support of the [CDC mission](https://www.cdc.gov/about/organization/mission.htm).  GitHub is not hosted by the CDC, but is a third party website used by CDC and its partners to share information and collaborate on software. CDC use of GitHub does not imply an endorsement of any one particular service, product, or enterprise. 
