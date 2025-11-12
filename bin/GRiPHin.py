@@ -15,6 +15,7 @@ from xlsxwriter.utility import xl_rowcol_to_cell
 import csv
 from Bio import SeqIO
 from itertools import chain
+from pathlib import Path
 
 ##Makes a summary Excel file when given a series of output summary line files from PhoeNiX
 ##Usage: >python GRiPHin.py -s ./samplesheet.csv -a ResGANNCBI_20220915_srst2.fasta -c control_file.csv -o output --phoenix --scaffolds
@@ -143,6 +144,16 @@ def _safe_int(value):
         return int(float(cleaned))
     except (ValueError, TypeError):
         return 'Unknown'
+
+def _safe_float(value):
+    """Attempt to convert a value to float, returning None on failure."""
+    try:
+        cleaned = str(value).strip().replace('%', '').replace(',', '')
+        if cleaned == "":
+            return None
+        return float(cleaned)
+    except (ValueError, TypeError):
+        return None
 
 def extract_quast_metrics(quast_report):
     """Parse QUAST summary TSV and return key assembly metrics."""
@@ -720,7 +731,7 @@ def parse_srst2_ar(srst2_file, ar_dic, final_srst2_df, sample_name):
     final_srst2_df = pd.concat([final_srst2_df, df], axis=0, sort=True, ignore_index=False).fillna("")
     return final_srst2_df
 
-def Get_Metrics(phoenix_entry, scaffolds_entry, set_coverage, srst2_ar_df, pf_df, ar_df, hv_df, trim_stats, raw_stats, kraken_trim, kraken_trim_report, kraken_wtasmbld_report, kraken_wtasmbld, quast_report, busco_short_summary, asmbld_ratio, gc_file, sample_name, mlst_file, fairy_file, gamma_ar_file, gamma_pf_file, gamma_hv_file, fast_ani_file, tax_file, srst2_file, ar_dic):
+def Get_Metrics(phoenix_entry, scaffolds_entry, set_coverage, srst2_ar_df, pf_df, ar_df, hv_df, trim_stats, raw_stats, kraken_trim, kraken_trim_report, kraken_wtasmbld_report, kraken_wtasmbld, quast_report, busco_short_summary, asmbld_ratio, gc_file, sample_name, mlst_file, fairy_file, gamma_ar_file, gamma_pf_file, gamma_hv_file, fast_ani_file, tax_file, srst2_file, abricate_plasmid_file, abricate_card_file, abricate_megares_file, abricate_vfdb_file, abricate_ecoli_vf_file, ar_dic):
     '''For each step to gather metrics try to find the file and if not then make all variables unknown'''
     try:
         Q30_R1_per, Q30_R2_per, Total_Raw_Seq_bp, Total_Raw_reads, Total_Trimmed_bp, Paired_Trimmed_reads, Total_Trimmed_reads, Trim_Q30_R1_percent, Trim_Q30_R2_percent = get_Q30(trim_stats, raw_stats)
@@ -780,6 +791,26 @@ def Get_Metrics(phoenix_entry, scaffolds_entry, set_coverage, srst2_ar_df, pf_df
         ani_source_file = fastani_ID = fastani_coverage = fastani_organism = 'Unknown'
         FastANI_output_list = [ani_source_file, fastani_ID, fastani_coverage, fastani_organism]
         scheme_guess_fastani = ""
+
+    genus = 'Unknown'
+    if scheme_guess_fastani:
+        scheme_guess = scheme_guess_fastani
+        try:
+            genus = FastANI_output_list[3].split()[0]
+        except Exception:
+            genus = 'Unknown'
+    elif scheme_guess_kraken_wt:
+        scheme_guess = scheme_guess_kraken_wt
+        genus = kraken_wtasmbld_genus
+    elif scheme_guess_kraken_trimd:
+        scheme_guess = scheme_guess_kraken_trimd
+        genus = kraken_trim_genus
+    else:
+        scheme_guess = 'Unknown'
+        if isinstance(kraken_trim_genus, str) and kraken_trim_genus:
+            genus = kraken_trim_genus
+        elif isinstance(kraken_wtasmbld_genus, str) and kraken_wtasmbld_genus:
+            genus = kraken_wtasmbld_genus
     try:
         ar_df = parse_gamma_ar(gamma_ar_file, sample_name, ar_df)
     except FileNotFoundError: 
@@ -825,23 +856,6 @@ def Get_Metrics(phoenix_entry, scaffolds_entry, set_coverage, srst2_ar_df, pf_df
         srst2_ar_df = pd.concat([srst2_ar_df, df], axis=0, sort=True, ignore_index=False).fillna("")
         srst2_warning = None
     try:
-        alerts = compile_alerts(scaffolds_entry, Coverage, assembly_ratio_metrics[1], gc_metrics[0])
-    except:
-        alerts = ""
-    # try except in the function itself
-    kraken_trim_genus, kraken_wtasmbld_genus = parse_kraken_report(kraken_trim_report, kraken_wtasmbld_report, sample_name)
-    #check which scheme guess to use - use fastANI > kraken wt > kraken_trimd
-    if scheme_guess_fastani == "":
-        if scheme_guess_kraken_wt == "":
-            scheme_guess = scheme_guess_kraken_wt
-            genus = kraken_wtasmbld_genus
-        else: #use kraken trimmed
-            scheme_guess = scheme_guess_kraken_trimd
-            genus = kraken_trim_genus
-    else:
-        scheme_guess = scheme_guess_fastani
-        genus = FastANI_output_list[3].split(" ")[0]
-    try:
         Scheme_list = parse_mlst(mlst_file, scheme_guess, sample_name)
         if len(Scheme_list[0]) > 1: # If there is more than one scheme
             if Scheme_list[0][0] < Scheme_list[0][1]: # this if else is all just to make sure things are printing out in the same order.
@@ -885,8 +899,19 @@ def Get_Metrics(phoenix_entry, scaffolds_entry, set_coverage, srst2_ar_df, pf_df
                                     genus, fastani_warning, busco_metrics[1], FastANI_output_list[1], FastANI_output_list[2], srst2_warning)
     except:
         warnings = ""
+    abricate_plasmid_metrics = parse_abricate_report(abricate_plasmid_file)
+    abricate_card_metrics = parse_abricate_report(abricate_card_file)
+    abricate_megares_metrics = parse_abricate_report(abricate_megares_file)
+    abricate_vfdb_metrics = parse_abricate_report(abricate_vfdb_file)
+    abricate_ecoli_vf_metrics = parse_abricate_report(abricate_ecoli_vf_file)
+    alerts = ""
+    try:
+        alerts = compile_alerts(scaffolds_entry, Coverage, assembly_ratio_metrics[1], gc_metrics[0])
+    except:
+        alerts = ""
     return srst2_ar_df, pf_df, ar_df, hv_df, Q30_R1_per, Q30_R2_per, Total_Raw_Seq_bp, Total_Raw_reads, Paired_Trimmed_reads, Total_Trimmed_reads, Trim_kraken, Asmbld_kraken, Coverage, Assembly_Length, N50, L50, Contigs_1Mbp, FastANI_output_list, warnings, alerts, \
-    Scaffold_Count, busco_metrics, gc_metrics, assembly_ratio_metrics, QC_result, QC_reason, MLST_scheme_1, MLST_scheme_2, MLST_type_1, MLST_type_2, MLST_alleles_1, MLST_alleles_2, MLST_source_1, MLST_source_2
+    Scaffold_Count, busco_metrics, gc_metrics, assembly_ratio_metrics, QC_result, QC_reason, MLST_scheme_1, MLST_scheme_2, MLST_type_1, MLST_type_2, MLST_alleles_1, MLST_alleles_2, MLST_source_1, MLST_source_2, \
+    abricate_plasmid_metrics, abricate_card_metrics, abricate_megares_metrics, abricate_vfdb_metrics, abricate_ecoli_vf_metrics
 
 def Get_Files(directory, sample_name):
     '''Create file paths to collect files from sample folder.'''
@@ -937,20 +962,43 @@ def Get_Files(directory, sample_name):
         srst2_file = glob.glob(directory + "/srst2/" + sample_name + "__fullgenes__*_srst2__results.txt")[0]
     except IndexError:
         srst2_file = directory + "/srst2/" + sample_name + "__fullgenes__blank_srst2__results.txt"
-    return trim_stats, raw_stats, kraken_trim, kraken_trim_report, kraken_wtasmbld_report, kraken_wtasmbld, quast_report, mlst_file, fairy_file, busco_short_summary, asmbld_ratio, gc, gamma_ar_file, gamma_pf_file, gamma_hv_file, fast_ani_file, tax_file, srst2_file
+    try:
+        abricate_plasmid = glob.glob(directory + "/abricate/plasmidfinder/" + sample_name + "_*.tab")[0]
+    except IndexError:
+        abricate_plasmid = directory + "/abricate/plasmidfinder/" + sample_name + "_blank.tab"
+    try:
+        abricate_card = glob.glob(directory + "/abricate/card/" + sample_name + "_*.tab")[0]
+    except IndexError:
+        abricate_card = directory + "/abricate/card/" + sample_name + "_blank.tab"
+    try:
+        abricate_megares = glob.glob(directory + "/abricate/megares/" + sample_name + "_*.tab")[0]
+    except IndexError:
+        abricate_megares = directory + "/abricate/megares/" + sample_name + "_blank.tab"
+    try:
+        abricate_vfdb = glob.glob(directory + "/abricate/vfdb/" + sample_name + "_*.tab")[0]
+    except IndexError:
+        abricate_vfdb = directory + "/abricate/vfdb/" + sample_name + "_blank.tab"
+    try:
+        abricate_ecoli_vf = glob.glob(directory + "/abricate/ecoli_vf/" + sample_name + "_*.tab")[0]
+    except IndexError:
+        abricate_ecoli_vf = directory + "/abricate/ecoli_vf/" + sample_name + "_blank.tab"
+    return trim_stats, raw_stats, kraken_trim, kraken_trim_report, kraken_wtasmbld_report, kraken_wtasmbld, quast_report, mlst_file, fairy_file, busco_short_summary, asmbld_ratio, gc, gamma_ar_file, gamma_pf_file, gamma_hv_file, fast_ani_file, tax_file, srst2_file, abricate_plasmid, abricate_card, abricate_megares, abricate_vfdb, abricate_ecoli_vf
 
 def Append_Lists(data_location, parent_folder, sample_name, Q30_R1_per, Q30_R2_per, Total_Raw_Seq_bp, Total_Seq_reads, Paired_Trimmed_reads, Total_trim_Seq_reads, Trim_kraken, Asmbld_kraken, Coverage, Assembly_Length, N50, L50, Contigs_1Mbp, FastANI_output_list, warnings, alerts, \
             Scaffold_Count, busco_metrics, gc_metrics, assembly_ratio_metrics, QC_result, QC_reason, MLST_scheme_1, MLST_scheme_2, MLST_type_1, MLST_type_2, MLST_alleles_1, MLST_alleles_2, MLST_source_1, MLST_source_2, \
             data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L,Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, N50_L, L50_L, Contigs_1Mb_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L, \
-            Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L, MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L):
+            Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L, MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L, \
+            abricate_plasmid_metrics=None, abricate_card_metrics=None, abricate_megares_metrics=None, abricate_vfdb_metrics=None, abricate_ecoli_vf_metrics=None, \
+            abricate_plasmid_count_L=None, abricate_plasmid_genes_L=None, abricate_card_count_L=None, abricate_card_genes_L=None, abricate_megares_count_L=None, abricate_megares_genes_L=None, abricate_vfdb_count_L=None, abricate_vfdb_genes_L=None, abricate_ecoli_vf_count_L=None, abricate_ecoli_vf_genes_L=None):
+        # Append per-sample summary metrics
         data_location_L.append(data_location)
         parent_folder_L.append(parent_folder)
-        Sample_Names.append(str(sample_name))
+        Sample_Names.append(sample_name)
         Q30_R1_per_L.append(Q30_R1_per)
         Q30_R2_per_L.append(Q30_R2_per)
-        #Total_Raw_Seq_bp_L.append(Total_Raw_Seq_bp)
-        Paired_Trimmed_reads_L.append(Paired_Trimmed_reads)
+        Total_Raw_Seq_bp_L.append(Total_Raw_Seq_bp)
         Total_Seq_reads_L.append(Total_Seq_reads)
+        Paired_Trimmed_reads_L.append(Paired_Trimmed_reads)
         Total_trim_Seq_reads_L.append(Total_trim_Seq_reads)
         Trim_kraken_L.append(Trim_kraken)
         Asmbld_kraken_L.append(Asmbld_kraken)
@@ -959,34 +1007,104 @@ def Append_Lists(data_location, parent_folder, sample_name, Q30_R1_per, Q30_R2_p
         N50_L.append(N50)
         L50_L.append(L50)
         Contigs_1Mb_L.append(Contigs_1Mbp)
-        Species_Support_L.append(FastANI_output_list[0])
-        fastani_organism_L.append(FastANI_output_list[3])
-        fastani_ID_L.append(FastANI_output_list[1])
-        fastani_coverage_L.append(FastANI_output_list[2])
-        gc_L.append(gc_metrics[1])
+
+        try:
+            fastani_source, fastani_id, fastani_cov, fastani_org = FastANI_output_list
+        except (TypeError, ValueError):
+            fastani_source = fastani_id = fastani_cov = fastani_org = 'Unknown'
+
+        Species_Support_L.append(fastani_source or 'Unknown')
+        fastani_organism_L.append(fastani_org or 'Unknown')
+        fastani_ID_L.append(fastani_id or 'Unknown')
+        fastani_coverage_L.append(fastani_cov or 'Unknown')
+
+        warnings_L.append(warnings or "")
+        alerts_L.append(alerts or "")
+
         Scaffold_Count_L.append(Scaffold_Count)
-        busco_lineage_L.append(busco_metrics[0])
-        percent_busco_L.append(busco_metrics[1])
-        assembly_ratio_L.append(assembly_ratio_metrics[0])
-        assembly_stdev_L.append(assembly_ratio_metrics[1])
-        tax_method_L.append(assembly_ratio_metrics[2])
+
+        if isinstance(busco_metrics, (list, tuple)) and len(busco_metrics) >= 2:
+            busco_lineage, percent_busco = busco_metrics[0], busco_metrics[1]
+        else:
+            busco_lineage, percent_busco = 'Unknown', 'Unknown'
+        busco_lineage_L.append(busco_lineage)
+        percent_busco_L.append(percent_busco)
+
+        if isinstance(gc_metrics, (list, tuple)) and len(gc_metrics) >= 2:
+            gc_value = gc_metrics[1]
+        else:
+            gc_value = 'Unknown'
+        gc_L.append(gc_value)
+
+        if isinstance(assembly_ratio_metrics, (list, tuple)) and len(assembly_ratio_metrics) >= 3:
+            assembly_ratio_value = assembly_ratio_metrics[0]
+            assembly_stdev_value = assembly_ratio_metrics[1]
+            tax_method_value = assembly_ratio_metrics[2]
+        else:
+            assembly_ratio_value = assembly_stdev_value = tax_method_value = 'Unknown'
+        assembly_ratio_L.append(assembly_ratio_value)
+        assembly_stdev_L.append(assembly_stdev_value)
+        tax_method_L.append(tax_method_value)
+
         QC_result_L.append(QC_result)
-        QC_reason_L.append(QC_reason)
-        warnings_L.append(warnings)
-        alerts_L.append(alerts)
+        QC_reason_L.append(QC_reason or "")
+
         MLST_scheme_1_L.append(MLST_scheme_1)
         MLST_scheme_2_L.append(MLST_scheme_2)
-        MLST_type_1_L.append(MLST_type_1),
+        MLST_type_1_L.append(MLST_type_1)
         MLST_type_2_L.append(MLST_type_2)
         MLST_alleles_1_L.append(MLST_alleles_1)
         MLST_alleles_2_L.append(MLST_alleles_2)
         MLST_source_1_L.append(MLST_source_1)
         MLST_source_2_L.append(MLST_source_2)
+
+        if abricate_plasmid_count_L is None:
+            abricate_plasmid_count_L = []
+        if abricate_plasmid_genes_L is None:
+            abricate_plasmid_genes_L = []
+        if abricate_card_count_L is None:
+            abricate_card_count_L = []
+        if abricate_card_genes_L is None:
+            abricate_card_genes_L = []
+        if abricate_megares_count_L is None:
+            abricate_megares_count_L = []
+        if abricate_megares_genes_L is None:
+            abricate_megares_genes_L = []
+        if abricate_vfdb_count_L is None:
+            abricate_vfdb_count_L = []
+        if abricate_vfdb_genes_L is None:
+            abricate_vfdb_genes_L = []
+        if abricate_ecoli_vf_count_L is None:
+            abricate_ecoli_vf_count_L = []
+        if abricate_ecoli_vf_genes_L is None:
+            abricate_ecoli_vf_genes_L = []
+        abricate_plasmid_metrics = abricate_plasmid_metrics or (0, "")
+        abricate_card_metrics = abricate_card_metrics or (0, "")
+        abricate_megares_metrics = abricate_megares_metrics or (0, "")
+        abricate_vfdb_metrics = abricate_vfdb_metrics or (0, "")
+        abricate_ecoli_vf_metrics = abricate_ecoli_vf_metrics or (0, "")
+        abricate_plasmid_count, abricate_plasmid_genes = abricate_plasmid_metrics
+        abricate_card_count, abricate_card_genes = abricate_card_metrics
+        abricate_megares_count, abricate_megares_genes = abricate_megares_metrics
+        abricate_vfdb_count, abricate_vfdb_genes = abricate_vfdb_metrics
+        abricate_ecoli_vf_count, abricate_ecoli_vf_genes = abricate_ecoli_vf_metrics
+        abricate_plasmid_count_L.append(abricate_plasmid_count)
+        abricate_plasmid_genes_L.append(abricate_plasmid_genes)
+        abricate_card_count_L.append(abricate_card_count)
+        abricate_card_genes_L.append(abricate_card_genes)
+        abricate_megares_count_L.append(abricate_megares_count)
+        abricate_megares_genes_L.append(abricate_megares_genes)
+        abricate_vfdb_count_L.append(abricate_vfdb_count)
+        abricate_vfdb_genes_L.append(abricate_vfdb_genes)
+        abricate_ecoli_vf_count_L.append(abricate_ecoli_vf_count)
+        abricate_ecoli_vf_genes_L.append(abricate_ecoli_vf_genes)
         return data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, N50_L, L50_L, Contigs_1Mb_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L, \
-        Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L, MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L
+        Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L, MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L, \
+        abricate_plasmid_count_L, abricate_plasmid_genes_L, abricate_card_count_L, abricate_card_genes_L, abricate_megares_count_L, abricate_megares_genes_L, abricate_vfdb_count_L, abricate_vfdb_genes_L, abricate_ecoli_vf_count_L, abricate_ecoli_vf_genes_L
 
 def Create_df(phoenix, data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, N50_L, L50_L, Contigs_1Mb_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L,
-Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L, MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L):
+Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L, MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L,
+abricate_plasmid_count_L, abricate_plasmid_genes_L, abricate_card_count_L, abricate_card_genes_L, abricate_megares_count_L, abricate_megares_genes_L, abricate_vfdb_count_L, abricate_vfdb_genes_L, abricate_ecoli_vf_count_L, abricate_ecoli_vf_genes_L):
     #combine all metrics into a dataframe
     if phoenix == True:
         data = {'WGS_ID'             : Sample_Names,
@@ -1018,6 +1136,16 @@ Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, asse
         'FastANI_%ID'                : fastani_ID_L, 
         'FastANI_%Coverage'          : fastani_coverage_L,
         'Species_Support_ANI'        : Species_Support_L,
+        'ABRicate_Plasmid_Hits'      : abricate_plasmid_count_L,
+        'ABRicate_Plasmid_Genes'     : abricate_plasmid_genes_L,
+        'ABRicate_CARD_Hits'         : abricate_card_count_L,
+        'ABRicate_CARD_Genes'        : abricate_card_genes_L,
+        'ABRicate_MEGARes_Hits'      : abricate_megares_count_L,
+        'ABRicate_MEGARes_Genes'     : abricate_megares_genes_L,
+        'ABRicate_VFDB_Hits'         : abricate_vfdb_count_L,
+        'ABRicate_VFDB_Genes'        : abricate_vfdb_genes_L,
+        'ABRicate_EcoliVF_Hits'      : abricate_ecoli_vf_count_L,
+        'ABRicate_EcoliVF_Genes'     : abricate_ecoli_vf_genes_L,
         'Primary_MLST_Scheme'        : MLST_scheme_1_L,
         'Primary_MLST_Source'        : MLST_source_1_L,
         'Primary_MLST'               : MLST_type_1_L,
@@ -1058,6 +1186,16 @@ Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, asse
         'FastANI_%ID'                : fastani_ID_L, 
         'FastANI_%Coverage'          : fastani_coverage_L,
         'Species_Support_ANI'        : Species_Support_L,
+        'ABRicate_Plasmid_Hits'      : abricate_plasmid_count_L,
+        'ABRicate_Plasmid_Genes'     : abricate_plasmid_genes_L,
+        'ABRicate_CARD_Hits'         : abricate_card_count_L,
+        'ABRicate_CARD_Genes'        : abricate_card_genes_L,
+        'ABRicate_MEGARes_Hits'      : abricate_megares_count_L,
+        'ABRicate_MEGARes_Genes'     : abricate_megares_genes_L,
+        'ABRicate_VFDB_Hits'         : abricate_vfdb_count_L,
+        'ABRicate_VFDB_Genes'        : abricate_vfdb_genes_L,
+        'ABRicate_EcoliVF_Hits'      : abricate_ecoli_vf_count_L,
+        'ABRicate_EcoliVF_Genes'     : abricate_ecoli_vf_genes_L,
         'Primary_MLST_Scheme'        : MLST_scheme_1_L,
         'Primary_MLST_Source'        : MLST_source_1_L,
         'Primary_MLST'               : MLST_type_1_L,
@@ -1224,7 +1362,13 @@ def write_to_excel(set_coverage, output, df, qc_max_col, ar_gene_count, pf_gene_
         'N50',
         'L50',
         'Contigs_>=1Mbp'
-    ]
+    ] + [col for col in [
+        'ABRicate_Plasmid_Hits',
+        'ABRicate_CARD_Hits',
+        'ABRicate_MEGARes_Hits',
+        'ABRicate_VFDB_Hits',
+        'ABRicate_EcoliVF_Hits'
+    ] if col in df.columns]
     _apply_numeric_format(comma_columns, number_comma_format)
 
     # Setting columns to float so its more human readable
@@ -1318,7 +1462,7 @@ def write_to_excel(set_coverage, output, df, qc_max_col, ar_gene_count, pf_gene_
     ##    column_count = column_count + 1
     # Creating footers
     worksheet.write('A' + str(max_row + 4), 'Cells in YELLOW denote isolates outside of ' + str(set_coverage) + '-100X coverage', yellow_format)
-    worksheet.write('A' + str(max_row + 5), 'Cells in ORANGE denote “Big 5” carbapenemase gene (i.e., blaKPC, blaNDM, blaOXA-48-like, blaVIM, and blaIMP) or an acquired blaOXA gene, please confirm what AR Lab Network HAI/AR WGS priority these meet.', orange_format_nb)
+    worksheet.write('A' + str(max_row + 5), 'Cells in ORANGE denote "Big 5" carbapenemase gene (i.e., blaKPC, blaNDM, blaOXA-48-like, blaVIM, and blaIMP) or an acquired blaOXA gene, please confirm what AR Lab Network HAI/AR WGS priority these meet.', orange_format_nb)
     worksheet.write('A' + str(max_row + 6), 'Cells in RED denote isolates that failed one or more auto failure triggers (cov < 30, assembly ratio stdev > 2.58, assembly length < 1Mbps)', red_format)
     # More footers - Disclaimer etc.
     # unbold
@@ -1326,7 +1470,7 @@ def write_to_excel(set_coverage, output, df, qc_max_col, ar_gene_count, pf_gene_
     worksheet.write('A' + str(max_row + 7),"^Using Antibiotic Resistance Gene database " + ar_db + " (ResFinder, ARG-ANNOT, NCBI Bacterial Antimicrobial Resistance Reference Gene Database) using output thresholds ([98AA/90]G:[98NT/90]S); gene matches from S:(SRST2) with [%Nuc_Identity, %Coverage], or from G:(GAMMA) with [%Nuc_Identity, %AA_Identity,  %Coverage]; GAMMA gene matches indicate associated contig.", no_bold)
     worksheet.write('A' + str(max_row + 8),"^^Using CDC-compiled iroB, iucA, peg-344, rmpA, and rmpA2 hypervirulence gene database ( " + hv_db + " ); gene matches noted with [%Nuc_Identity, %AA_Identity,  %Coverage].", no_bold)
     worksheet.write('A' + str(max_row + 9),"^^^Using the plasmid incompatibility replicons plasmidFinder database ( " + pf_db + " ) using output thresholds [95NT/60]; replicon matches noted with [%Nuc_Identity, %Coverage].", no_bold)
-    worksheet.write('A' + str(max_row + 10),"DISCLAIMER: These data are preliminary and subject to change. The identification methods used and the data summarized are for public health surveillance or investigational purposes only and must NOT be communicated to the patient, their care provider, or placed in the patient’s medical record. These results should NOT be used for diagnosis, treatment, or assessment of individual patient health or management.", bold)
+    worksheet.write('A' + str(max_row + 10),"DISCLAIMER: These data are preliminary and subject to change. The identification methods used and the data summarized are for public health surveillance or investigational purposes only and must NOT be communicated to the patient, their care provider, or placed in the patient's medical record. These results should NOT be used for diagnosis, treatment, or assessment of individual patient health or management.", bold)
     #adding review and date info
     worksheet.write('A' + str(max_row + 12), "Reviewed by:", no_bold)
     worksheet.write('D' + str(max_row + 12), "Date:")
@@ -1401,11 +1545,67 @@ def convert_excel_to_tsv(output):
     #Write dataframe into csv
     data_xlsx.to_csv(output_file + '.tsv', sep='\t', encoding='utf-8',  index=False, line_terminator='\n')
 
+def parse_abricate_report(report_path):
+    """Return (hit_count, gene_summary) for an ABRicate tab file."""
+    report = Path(report_path)
+    if not report.exists() or report.stat().st_size == 0:
+        return 0, ""
+
+    hits = []
+    gene_stats = {}
+    try:
+        with report.open() as handle:
+            reader = csv.DictReader(handle, delimiter='\t')
+            for row in reader:
+                if not row:
+                    continue
+                pass_status = (row.get('PASS') or '').strip().upper()
+                if pass_status and pass_status not in ('Y', 'YES', 'PASS', 'T', 'TRUE', '1'):
+                    continue
+                gene = (row.get('GENE') or row.get('Gene') or row.get('PRODUCT') or '').strip()
+                if gene:
+                    hits.append(gene)
+                    ident = _safe_float(row.get('%IDENTITY') or row.get('IDENTITY') or row.get('PIDENT') or row.get('Identity'))
+                    cov = _safe_float(row.get('%COVERAGE') or row.get('COVERAGE') or row.get('PCOVERAGE') or row.get('Coverage'))
+                    existing = gene_stats.get(gene)
+                    if existing is None:
+                        gene_stats[gene] = (ident, cov)
+                    else:
+                        best_ident, best_cov = existing
+                        replace = False
+                        if ident is not None and (best_ident is None or ident > best_ident):
+                            replace = True
+                        elif ident == best_ident and cov is not None and (best_cov is None or cov > best_cov):
+                            replace = True
+                        elif ident is None and cov is not None and best_cov is None:
+                            replace = True
+                        if replace:
+                            gene_stats[gene] = (ident, cov)
+    except Exception:
+        return 0, ""
+
+    if not hits:
+        return 0, ""
+
+    def _format_detail(gene, stats):
+        ident, cov = stats
+        parts = []
+        if ident is not None:
+            parts.append(f"ID {ident:.1f}%")
+        if cov is not None:
+            parts.append(f"Cov {cov:.1f}%")
+        if parts:
+            return f"{gene} ({', '.join(parts)})"
+        return gene
+
+    details = [_format_detail(gene, gene_stats.get(gene, (None, None))) for gene in sorted(set(hits))]
+    return len(hits), ', '.join(details)
+
 def main():
     args = parseArgs()
     # create empty lists to append to later
     Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, N50_L, L50_L, Contigs_1Mb_L, Species_Support_L, Scaffold_Count_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L, \
-    busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L, MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L, data_location_L, parent_folder_L = ([] for i in range(39))
+    busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L, MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L, data_location_L, parent_folder_L, abricate_plasmid_count_L, abricate_plasmid_genes_L, abricate_card_count_L, abricate_card_genes_L, abricate_megares_count_L, abricate_megares_genes_L, abricate_vfdb_count_L, abricate_vfdb_genes_L, abricate_ecoli_vf_count_L, abricate_ecoli_vf_genes_L = ([] for i in range(49))
     ar_df = pd.DataFrame() #create empty dataframe to fill later for AR genes
     pf_df = pd.DataFrame() #create another empty dataframe to fill later for Plasmid markers
     hv_df = pd.DataFrame() #create another empty dataframe to fill later for hypervirulence genes
@@ -1433,20 +1633,40 @@ def main():
             if sample_name.lower() == "resolve":
                 continue
             data_location, parent_folder = Get_Parent_Folder(directory)
-            trim_stats, raw_stats, kraken_trim, kraken_trim_report, kraken_wtasmbld_report, kraken_wtasmbld, quast_report, mlst_file, fairy_file, busco_short_summary, asmbld_ratio, gc, gamma_ar_file, gamma_pf_file, gamma_hv_file, fast_ani_file, tax_file, srst2_file = Get_Files(directory, sample_name)
+            trim_stats, raw_stats, kraken_trim, kraken_trim_report, kraken_wtasmbld_report, kraken_wtasmbld, quast_report, mlst_file, fairy_file, busco_short_summary, asmbld_ratio, gc, gamma_ar_file, gamma_pf_file, gamma_hv_file, fast_ani_file, tax_file, srst2_file, abricate_plasmid, abricate_card, abricate_megares, abricate_vfdb, abricate_ecoli_vf = Get_Files(directory, sample_name)
             #Get the metrics for the sample
             srst2_ar_df, pf_df, ar_df, hv_df, Q30_R1_per, Q30_R2_per, Total_Raw_Seq_bp, Total_Seq_reads, Paired_Trimmed_reads, Total_trim_Seq_reads, Trim_kraken, Asmbld_kraken, Coverage, Assembly_Length, N50, L50, Contigs_1Mbp, FastANI_output_list, warnings, alerts, Scaffold_Count, busco_metrics, gc_metrics, assembly_ratio_metrics, QC_result, \
-            QC_reason, MLST_scheme_1, MLST_scheme_2, MLST_type_1, MLST_type_2, MLST_alleles_1, MLST_alleles_2, MLST_source_1, MLST_source_2 = Get_Metrics(args.phoenix, args.scaffolds, args.set_coverage, srst2_ar_df, pf_df, ar_df, hv_df, trim_stats, raw_stats, kraken_trim, kraken_trim_report, kraken_wtasmbld_report, kraken_wtasmbld, quast_report, busco_short_summary, asmbld_ratio, gc, sample_name, mlst_file, fairy_file, gamma_ar_file, gamma_pf_file, gamma_hv_file, fast_ani_file, tax_file, srst2_file, ar_dic)
+            QC_reason, MLST_scheme_1, MLST_scheme_2, MLST_type_1, MLST_type_2, MLST_alleles_1, MLST_alleles_2, MLST_source_1, MLST_source_2, \
+            abricate_plasmid_metrics, abricate_card_metrics, abricate_megares_metrics, abricate_vfdb_metrics, abricate_ecoli_vf_metrics = Get_Metrics(args.phoenix, args.scaffolds, args.set_coverage, srst2_ar_df, pf_df, ar_df, hv_df, trim_stats, raw_stats, kraken_trim, kraken_trim_report, kraken_wtasmbld_report, kraken_wtasmbld, quast_report, busco_short_summary, asmbld_ratio, gc, sample_name, mlst_file, fairy_file, gamma_ar_file, gamma_pf_file, gamma_hv_file, fast_ani_file, tax_file, srst2_file, abricate_plasmid, abricate_card, abricate_megares, abricate_vfdb, abricate_ecoli_vf, ar_dic)
             #Collect this mess of variables into appeneded lists
             data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, N50_L, L50_L, Contigs_1Mb_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L , alerts_L, \
-            Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L , MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L = Append_Lists(data_location, parent_folder, sample_name, \
-            Q30_R1_per, Q30_R2_per, Total_Raw_Seq_bp, Total_Seq_reads, Paired_Trimmed_reads, Total_trim_Seq_reads, Trim_kraken, Asmbld_kraken, Coverage, Assembly_Length, N50, L50, Contigs_1Mbp, FastANI_output_list, warnings, alerts, Scaffold_Count, busco_metrics, \
-            gc_metrics, assembly_ratio_metrics, QC_result, QC_reason, MLST_scheme_1, MLST_scheme_2, MLST_type_1, MLST_type_2, MLST_alleles_1, MLST_alleles_2, MLST_source_1, MLST_source_2, \
-            data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, N50_L, L50_L, Contigs_1Mb_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L, \
-            Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L, MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L)
+            Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L , MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L, \
+            abricate_plasmid_count_L, abricate_plasmid_genes_L, abricate_card_count_L, abricate_card_genes_L, abricate_megares_count_L, abricate_megares_genes_L, abricate_vfdb_count_L, abricate_vfdb_genes_L, abricate_ecoli_vf_count_L, abricate_ecoli_vf_genes_L = Append_Lists(
+                data_location, parent_folder, sample_name,
+                Q30_R1_per, Q30_R2_per, Total_Raw_Seq_bp, Total_Seq_reads, Paired_Trimmed_reads, Total_trim_Seq_reads, Trim_kraken, Asmbld_kraken, Coverage, Assembly_Length, N50, L50, Contigs_1Mbp, FastANI_output_list, warnings, alerts, Scaffold_Count, busco_metrics,
+                gc_metrics, assembly_ratio_metrics, QC_result, QC_reason, MLST_scheme_1, MLST_scheme_2, MLST_type_1, MLST_type_2, MLST_alleles_1, MLST_alleles_2, MLST_source_1, MLST_source_2,
+                data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, N50_L, L50_L, Contigs_1Mb_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L,
+                Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L, MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L,
+                abricate_plasmid_metrics=abricate_plasmid_metrics,
+                abricate_card_metrics=abricate_card_metrics,
+                abricate_megares_metrics=abricate_megares_metrics,
+                abricate_vfdb_metrics=abricate_vfdb_metrics,
+                abricate_ecoli_vf_metrics=abricate_ecoli_vf_metrics,
+                abricate_plasmid_count_L=abricate_plasmid_count_L,
+                abricate_plasmid_genes_L=abricate_plasmid_genes_L,
+                abricate_card_count_L=abricate_card_count_L,
+                abricate_card_genes_L=abricate_card_genes_L,
+                abricate_megares_count_L=abricate_megares_count_L,
+                abricate_megares_genes_L=abricate_megares_genes_L,
+                abricate_vfdb_count_L=abricate_vfdb_count_L,
+                abricate_vfdb_genes_L=abricate_vfdb_genes_L,
+                abricate_ecoli_vf_count_L=abricate_ecoli_vf_count_L,
+                abricate_ecoli_vf_genes_L=abricate_ecoli_vf_genes_L
+            )
     # combine all lists into a dataframe
-    df = Create_df(args.phoenix, data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, N50_L, L50_L, Contigs_1Mb_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L, \
-    Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L , MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L)
+    df = Create_df(args.phoenix, data_location_L, parent_folder_L, Sample_Names, Q30_R1_per_L, Q30_R2_per_L, Total_Raw_Seq_bp_L, Total_Seq_reads_L, Paired_Trimmed_reads_L, Total_trim_Seq_reads_L, Trim_kraken_L, Asmbld_kraken_L, Coverage_L, Assembly_Length_L, N50_L, L50_L, Contigs_1Mb_L, Species_Support_L, fastani_organism_L, fastani_ID_L, fastani_coverage_L, warnings_L, alerts_L,
+Scaffold_Count_L, busco_lineage_L, percent_busco_L, gc_L, assembly_ratio_L, assembly_stdev_L, tax_method_L, QC_result_L, QC_reason_L, MLST_scheme_1_L, MLST_scheme_2_L, MLST_type_1_L, MLST_type_2_L, MLST_alleles_1_L, MLST_alleles_2_L, MLST_source_1_L, MLST_source_2_L,
+abricate_plasmid_count_L, abricate_plasmid_genes_L, abricate_card_count_L, abricate_card_genes_L, abricate_megares_count_L, abricate_megares_genes_L, abricate_vfdb_count_L, abricate_vfdb_genes_L, abricate_ecoli_vf_count_L, abricate_ecoli_vf_genes_L)
     (qc_max_row, qc_max_col) = df.shape
     pf_max_col = pf_df.shape[1] - 1 #remove one for the WGS_ID column
     hv_max_col = hv_df.shape[1] - 1 #remove one for the WGS_ID column

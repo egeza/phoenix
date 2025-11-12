@@ -10,6 +10,22 @@ import re
 from re import search
 from itertools import chain
 
+ABRICATE_HIT_COLUMNS = [
+    'ABRicate_Plasmid_Hits',
+    'ABRicate_CARD_Hits',
+    'ABRicate_MEGARes_Hits',
+    'ABRicate_VFDB_Hits',
+    'ABRicate_EcoliVF_Hits'
+]
+
+ABRICATE_GENE_COLUMNS = [
+    'ABRicate_Plasmid_Genes',
+    'ABRicate_CARD_Genes',
+    'ABRicate_MEGARes_Genes',
+    'ABRicate_VFDB_Genes',
+    'ABRicate_EcoliVF_Genes'
+]
+
 ##Makes a summary Excel file when given a series of griphin xlsx files
 ##Usage: >python terra_combine_griphin.py -o Output_Report.xlsx
 ## Written by Jill Hagey (qpk9@cdc.gov)
@@ -55,6 +71,8 @@ def separate_column_type(excl_merged, df):
     # get qc/taxa number of columns
     qc_df = df.loc[:,'WGS_ID':'Secondary_MLST_Alleles']
     qc_col_list = list(qc_df.columns)
+    extra_qc_cols = [col for col in ABRICATE_HIT_COLUMNS + ABRICATE_GENE_COLUMNS if col in df.columns]
+    qc_col_list.extend(extra_qc_cols)
     # get ar number of columns - df
     ar_df = df.loc[:,'AR_Database':'HV_Database']
     ar_df = ar_df.drop(['HV_Database'], axis=1)
@@ -140,7 +158,7 @@ def write_excel(output_file, df, set_coverage, phoenix, qc_max_col, ar_gene_coun
         'N50',
         'L50',
         'Contigs_>=1Mbp'
-    ]
+    ] + [col for col in ABRICATE_HIT_COLUMNS if col in df.columns]
     _apply_numeric_format(comma_columns, number_comma_format)
 
     # Setting columns to float so its more human readable
@@ -307,6 +325,8 @@ def get_column_counts(df):
     # get qc number of columns
     qc_df = df.loc[:,'WGS_ID':'Secondary_MLST_Alleles']
     qc_max_col = int(len(qc_df.columns))
+    extra_qc_cols = [col for col in ABRICATE_HIT_COLUMNS + ABRICATE_GENE_COLUMNS if col in df.columns]
+    qc_max_col += len(extra_qc_cols)
     # get ar number of columns
     ar_df = df.loc[:,'AR_Database':'HV_Database']
     ar_df = ar_df.drop(['HV_Database'], axis=1)

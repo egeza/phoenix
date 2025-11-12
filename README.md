@@ -74,6 +74,8 @@ Note that this command clones (downloading) the repo to `~/.nextflow/assets/cdcg
 
     Ensure your environment can pull these images (or mirror them internally) when running the SRA entry points.
 
+    **ABRicate screening:** Assemblies are profiled with ABRicate against plasmidfinder (95% identity / 60% coverage), CARD and MEGARes (98% / 90%), and VFDB plus ecoli_vf (95% / 60%). Hit counts and gene summaries are reported in the GRiPHin Excel/TSV outputs.
+
 # CDCgov GitHub Organization Open Source Project
 
 **General disclaimer** This repository was created for use by CDC programs to collaborate on public health related projects in support of the [CDC mission](https://www.cdc.gov/about/organization/mission.htm).  GitHub is not hosted by the CDC, but is a third party website used by CDC and its partners to share information and collaborate on software. CDC use of GitHub does not imply an endorsement of any one particular service, product, or enterprise. 

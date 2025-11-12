@@ -42,6 +42,11 @@ include { RENAME_FASTA_HEADERS           } from '../modules/local/rename_fasta_h
 include { GAMMA_S as GAMMA_PF            } from '../modules/local/gammas'
 include { GAMMA as GAMMA_AR              } from '../modules/local/gamma'
 include { GAMMA as GAMMA_HV              } from '../modules/local/gamma'
+include { ABRICATE as ABRICATE_PLASMID   } from '../modules/local/abricate'
+include { ABRICATE as ABRICATE_CARD      } from '../modules/local/abricate'
+include { ABRICATE as ABRICATE_MEGARes   } from '../modules/local/abricate'
+include { ABRICATE as ABRICATE_VFDB      } from '../modules/local/abricate'
+include { ABRICATE as ABRICATE_ECOLIVF   } from '../modules/local/abricate'
 include { MLST                           } from '../modules/local/mlst'
 include { BBMAP_REFORMAT                 } from '../modules/local/contig_less500'
 include { SCAFFOLD_COUNT_CHECK           } from '../modules/local/fairy_scaffold_count_check'
@@ -243,6 +248,31 @@ workflow PHOENIX_EXTERNAL {
             filtered_scaffolds_ch, params.gamdbpf
         )
         ch_versions = ch_versions.mix(GAMMA_PF.out.versions)
+
+        ABRICATE_PLASMID (
+            filtered_scaffolds_ch, 'plasmidfinder'
+        )
+        ch_versions = ch_versions.mix(ABRICATE_PLASMID.out.versions)
+
+        ABRICATE_CARD (
+            filtered_scaffolds_ch, 'card'
+        )
+        ch_versions = ch_versions.mix(ABRICATE_CARD.out.versions)
+
+        ABRICATE_MEGARes (
+            filtered_scaffolds_ch, 'megares'
+        )
+        ch_versions = ch_versions.mix(ABRICATE_MEGARes.out.versions)
+
+        ABRICATE_VFDB (
+            filtered_scaffolds_ch, 'vfdb'
+        )
+        ch_versions = ch_versions.mix(ABRICATE_VFDB.out.versions)
+
+        ABRICATE_ECOLIVF (
+            filtered_scaffolds_ch, 'ecoli_vf'
+        )
+        ch_versions = ch_versions.mix(ABRICATE_ECOLIVF.out.versions)
 
         // Getting Assembly Stats
         QUAST (
