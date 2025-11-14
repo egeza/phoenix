@@ -94,6 +94,12 @@
                     "description": "Path (full or relative) for where BUSCO files are if you want to run in offline mode. The database is ~250GB if you download it from https://busco-data.ezlab.org/v5/data/lineages/ . Use only with -entry CDC_PHOENIX, CDC_SCAFFOLDS or CDC_SRA.",
                     "default": "Doesn't run in offline mode and connects to the V5 BUSCO database at https://busco-data.ezlab.org/v5/data/lineages/ ."
                 },
+                "serotypefinder_db": {
+                    "type": "string",
+                    "description": "Path to the SerotypeFinder database directory or compressed archive (.tar.gz). Provide this to enable SerotypeFinder analysis of assemblies.",
+                    "default": "null",
+                    "fa_icon": "fas fa-database"
+                },
                 "create_ncbi_sheet": {
                     "type": "boolean",
                     "fa_icon": "fas fa-keyboard",

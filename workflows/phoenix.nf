@@ -47,6 +47,7 @@ include { ABRICATE as ABRICATE_CARD      } from '../modules/local/abricate'
 include { ABRICATE as ABRICATE_MEGARes   } from '../modules/local/abricate'
 include { ABRICATE as ABRICATE_VFDB      } from '../modules/local/abricate'
 include { ABRICATE as ABRICATE_ECOLIVF   } from '../modules/local/abricate'
+include { SEROTYPEFINDER                 } from '../modules/local/serotypefinder'
 include { MLST                           } from '../modules/local/mlst'
 include { BBMAP_REFORMAT                 } from '../modules/local/contig_less500'
 include { SCAFFOLD_COUNT_CHECK           } from '../modules/local/fairy_scaffold_count_check'
@@ -273,6 +274,13 @@ workflow PHOENIX_EXTERNAL {
             filtered_scaffolds_ch, 'ecoli_vf'
         )
         ch_versions = ch_versions.mix(ABRICATE_ECOLIVF.out.versions)
+
+        if (params.serotypefinder_db) {
+            SEROTYPEFINDER (
+                filtered_scaffolds_ch, params.serotypefinder_db
+            )
+            ch_versions = ch_versions.mix(SEROTYPEFINDER.out.versions)
+        }
 
         // Getting Assembly Stats
         QUAST (
