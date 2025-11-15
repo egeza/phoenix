@@ -46,6 +46,7 @@ include { BUSCO                          } from '../modules/local/busco'
 include { GAMMA_S as GAMMA_PF            } from '../modules/local/gammas'
 include { GAMMA as GAMMA_AR              } from '../modules/local/gamma'
 include { GAMMA as GAMMA_HV              } from '../modules/local/gamma'
+include { SEROTYPEFINDER                 } from '../modules/local/serotypefinder'
 include { MLST                           } from '../modules/local/mlst'
 include { BBMAP_REFORMAT                 } from '../modules/local/contig_less500'
 include { SCAFFOLD_COUNT_CHECK           } from '../modules/local/fairy_scaffold_count_check'
@@ -263,6 +264,13 @@ workflow PHOENIX_EXQC {
             filtered_scaffolds_ch, params.gamdbpf
         )
         ch_versions = ch_versions.mix(GAMMA_PF.out.versions)
+
+        if (params.serotypefinder_db) {
+            SEROTYPEFINDER (
+                filtered_scaffolds_ch, params.serotypefinder_db
+            )
+            ch_versions = ch_versions.mix(SEROTYPEFINDER.out.versions)
+        }
 
         // Getting Assembly Stats
         QUAST (
