@@ -1,0 +1,7 @@
+sample,fastq_1,fastq_2
+EM-3_S13,/cbio/users/ephie/pipelines/out_fastq_QC/bbduk/EM-3_S13_R1.fq,/cbio/users/ephie/pipelines/out_fastq_QC/bbduk/EM-3_S13_R2.fq
+EM-161_S30,/cbio/users/ephie/pipelines/out_fastq_QC/bbduk/EM-161_S30_R1.fq,/cbio/users/ephie/pipelines/out_fastq_QC/bbduk/EM-161_S30_R2.fq
+EM-4_S14,/cbio/users/ephie/pipelines/out_fastq_QC/bbduk/EM-4_S14_R1.fq,/cbio/users/ephie/pipelines/out_fastq_QC/bbduk/EM-4_S14_R2.fq
+EM-5_S15,/cbio/users/ephie/pipelines/out_fastq_QC/bbduk/EM-5_S15_R1.fq,/cbio/users/ephie/pipelines/out_fastq_QC/bbduk/EM-5_S15_R2.fq
+EM-18A_S23,/cbio/users/ephie/pipelines/out_fastq_QC/bbduk/EM-18A_S23_R1.fq,/cbio/users/ephie/pipelines/out_fastq_QC/bbduk/EM-18A_S23_R2.fq
+EM-1_S12,/cbio/users/ephie/pipelines/out_fastq_QC/bbduk/EM-1_S12_R1.fq,/cbio/users/ephie/pipelines/out_fastq_QC/bbduk/EM-1_S12_R2.fq

@@ -46,6 +46,7 @@ include { CLIA_INTERNAL               } from './workflows/clia'
 include { UPDATE_PHOENIX_WF           } from './workflows/update_phoenix'
 include { RUN_CENTAR                  } from './workflows/centar'
 include { COMBINE_GRIPHINS_WF         } from './workflows/combine_griphins'
+include { MERGE_SAMPLESHEETS          } from './modules/local/merge_samplesheets'
 
 // At the top of your main workflow, before anything else
 if (!params.containsKey('mode') || !params.mode) {
@@ -250,6 +251,138 @@ workflow CDC_SRA {
         gamma_ar         = PHOENIX_EXQC.out.gamma_ar
         phx_summary      = PHOENIX_EXQC.out.phx_summary
         //output for phylophoenix
+        griphin_tsv      = PHOENIX_EXQC.out.griphin_tsv
+        griphin_excel    = PHOENIX_EXQC.out.griphin_excel
+        dir_samplesheet  = PHOENIX_EXQC.out.dir_samplesheet
+}
+
+
+/*
+========================================================================================
+    RUN MIXED WORKFLOWS (local reads + SRA reads in a single run)
+========================================================================================
+*/
+
+//
+// WORKFLOW: Run phoenix on a mix of local reads and SRA-downloaded reads.
+//           Accepts --input (local samplesheet) and/or --input_sra (SRA accession list).
+//
+workflow MIXED {
+    if (params.kraken2db == null) { exit 1, 'Input path to kraken2db not specified! Use --kraken2db to tell PHoeNIx where to find the database.' }
+    if (params.input == null && params.input_sra == null) {
+        exit 1, 'For --mode MIXED: provide at least one of --input (local samplesheet) or --input_sra (SRA accession list).'
+    }
+    if (params.input != null && params.input_sra == null) { log.warn "Only --input was provided to --mode MIXED. Consider using --mode PHOENIX instead." }
+    if (params.input == null && params.input_sra != null) { log.warn "Only --input_sra was provided to --mode MIXED. Consider using --mode SRA instead." }
+
+    ch_versions = Channel.empty()
+
+    main:
+        if (params.input_sra) {
+            def checkPathParamList = [ params.input_sra, params.multiqc_config, params.kraken2db ]
+            for (param in checkPathParamList) { if (param) { file(param, checkIfExists: true) } }
+            ch_sra_input = file(params.input_sra)
+            def sraNumbers = ch_sra_input.text.readLines()
+            for (sraNumber in sraNumbers) {
+                if (!(sraNumber.startsWith("SR") || sraNumber.startsWith("ER") || sraNumber.startsWith("DR"))) {
+                    exit 1, "Invalid accession in ${params.input_sra}. Only SR*/ER*/DR* accessions are allowed, but found: $sraNumber"
+                }
+            }
+            SRA_PREP ( ch_sra_input )
+            ch_versions  = ch_versions.mix(SRA_PREP.out.versions)
+            ch_sra_sheet = SRA_PREP.out.samplesheet
+        } else {
+            ch_sra_sheet = Channel.empty()
+        }
+
+        if (params.input) {
+            def checkPathParamList = [ params.input, params.multiqc_config, params.kraken2db ]
+            for (param in checkPathParamList) { if (param) { file(param, checkIfExists: true) } }
+            ch_local_sheet = Channel.value(file(params.input))
+        } else {
+            ch_local_sheet = Channel.empty()
+        }
+
+        if (params.input != null && params.input_sra != null) {
+            MERGE_SAMPLESHEETS ( ch_local_sheet, ch_sra_sheet )
+            ch_merged = MERGE_SAMPLESHEETS.out.csv
+        } else if (params.input != null) {
+            ch_merged = ch_local_sheet
+        } else {
+            ch_merged = ch_sra_sheet
+        }
+
+        PHOENIX_EXTERNAL ( ch_merged, ch_versions, true, params.centar )
+
+    emit:
+        scaffolds        = PHOENIX_EXTERNAL.out.scaffolds
+        trimmed_reads    = PHOENIX_EXTERNAL.out.trimmed_reads
+        mlst             = PHOENIX_EXTERNAL.out.mlst
+        amrfinder_output = PHOENIX_EXTERNAL.out.amrfinder_output
+        gamma_ar         = PHOENIX_EXTERNAL.out.gamma_ar
+        phx_summary      = PHOENIX_EXTERNAL.out.phx_summary
+        griphin_tsv      = PHOENIX_EXTERNAL.out.griphin_tsv
+        griphin_excel    = PHOENIX_EXTERNAL.out.griphin_excel
+        dir_samplesheet  = PHOENIX_EXTERNAL.out.dir_samplesheet
+}
+
+//
+// WORKFLOW: CDC internal version of MIXED (includes BUSCO, SRST2, KRAKEN_ASMBLED)
+//
+workflow CDC_MIXED {
+    if (params.kraken2db == null) { exit 1, 'Input path to kraken2db not specified! Use --kraken2db to tell PHoeNIx where to find the database.' }
+    if (params.input == null && params.input_sra == null) {
+        exit 1, 'For --mode CDC_MIXED: provide at least one of --input (local samplesheet) or --input_sra (SRA accession list).'
+    }
+    if (params.input != null && params.input_sra == null) { log.warn "Only --input was provided to --mode CDC_MIXED. Consider using --mode CDC_PHOENIX instead." }
+    if (params.input == null && params.input_sra != null) { log.warn "Only --input_sra was provided to --mode CDC_MIXED. Consider using --mode CDC_SRA instead." }
+
+    ch_versions = Channel.empty()
+
+    main:
+        if (params.input_sra) {
+            def checkPathParamList = [ params.input_sra, params.multiqc_config, params.kraken2db ]
+            for (param in checkPathParamList) { if (param) { file(param, checkIfExists: true) } }
+            ch_sra_input = file(params.input_sra)
+            def sraNumbers = ch_sra_input.text.readLines()
+            for (sraNumber in sraNumbers) {
+                if (!(sraNumber.startsWith("SR") || sraNumber.startsWith("ER") || sraNumber.startsWith("DR"))) {
+                    exit 1, "Invalid accession in ${params.input_sra}. Only SR*/ER*/DR* accessions are allowed, but found: $sraNumber"
+                }
+            }
+            SRA_PREP ( ch_sra_input )
+            ch_versions  = ch_versions.mix(SRA_PREP.out.versions)
+            ch_sra_sheet = SRA_PREP.out.samplesheet
+        } else {
+            ch_sra_sheet = Channel.empty()
+        }
+
+        if (params.input) {
+            def checkPathParamList = [ params.input, params.multiqc_config, params.kraken2db ]
+            for (param in checkPathParamList) { if (param) { file(param, checkIfExists: true) } }
+            ch_local_sheet = Channel.value(file(params.input))
+        } else {
+            ch_local_sheet = Channel.empty()
+        }
+
+        if (params.input != null && params.input_sra != null) {
+            MERGE_SAMPLESHEETS ( ch_local_sheet, ch_sra_sheet )
+            ch_merged = MERGE_SAMPLESHEETS.out.csv
+        } else if (params.input != null) {
+            ch_merged = ch_local_sheet
+        } else {
+            ch_merged = ch_sra_sheet
+        }
+
+        PHOENIX_EXQC ( ch_merged, ch_versions, true, params.centar )
+
+    emit:
+        scaffolds        = PHOENIX_EXQC.out.scaffolds
+        trimmed_reads    = PHOENIX_EXQC.out.trimmed_reads
+        mlst             = PHOENIX_EXQC.out.mlst
+        amrfinder_output = PHOENIX_EXQC.out.amrfinder_output
+        gamma_ar         = PHOENIX_EXQC.out.gamma_ar
+        phx_summary      = PHOENIX_EXQC.out.phx_summary
         griphin_tsv      = PHOENIX_EXQC.out.griphin_tsv
         griphin_excel    = PHOENIX_EXQC.out.griphin_excel
         dir_samplesheet  = PHOENIX_EXQC.out.dir_samplesheet
@@ -646,12 +779,16 @@ workflow {
         println("${red}WARNING: While this pipeline is undergoing CLIA validation at CDC, other users MUST conduct their own validation of this workflow and obtain explicit approval from THEIR CLIA director before considering it CLIA certified. Using this pipeline and reporting it's results to the patient, their care provider, or placed in the patient's medical record without proper validation may violate regulatory requirements.${reset}")
     } else if(params.mode_upper == "COMBINE_GRIPHINS") {
         COMBINE_GRIPHINS()
+    } else if(params.mode_upper == "MIXED") {
+        MIXED()
+    } else if(params.mode_upper == "CDC_MIXED") {
+        CDC_MIXED()
     } else if(params.mode_upper == "CENTAR") {
         CENTAR()
         // comment out to run CENTAR 
         //exit 1, "Sorry, --mode CENTAR hasn't completed its validation yet and will be released in another version of PHoeNIx!"
     } else {
-        exit 1, 'Please select a pipeline to run either: PHOENIX, CDC_PHOENIX, SCAFFOLDS, CDC_SCAFFOLDS, SRA, CDC_SRA, UPDATE_PHOENIX and COMBINE_GRIPHINS'
+        exit 1, 'Please select a pipeline to run either: PHOENIX, CDC_PHOENIX, SRA, CDC_SRA, MIXED, CDC_MIXED, SCAFFOLDS, CDC_SCAFFOLDS, UPDATE_PHOENIX or COMBINE_GRIPHINS'
     }
 }
 

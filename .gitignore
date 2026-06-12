@@ -1,0 +1,22 @@
+# Nextflow work directories
+work/
+.nextflow/
+.nextflow.log*
+
+# Output directories
+results/
+output/
+
+# Conda environments
+.conda/
+
+# Python cache
+*.pyc
+__pycache__/
+.pytest_cache/
+
+# Editors / OS
+.DS_Store
+*.swp
+*.swo
+Thumbs.db
