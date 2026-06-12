@@ -545,6 +545,22 @@ def Checking_auto_pass_fail(fairy_files, spades_fairy_file, scaffolds_entry, cov
         QC_result = "PASS"
     return QC_result, QC_reason
 
+def Parse_Abricate(abricate_file, sample_name):
+    """Parse an Abricate TSV result file and return a formatted string of gene hits."""
+    if abricate_file is None or not os.path.exists(str(abricate_file)):
+        return "No_file"
+    try:
+        df = pd.read_csv(abricate_file, sep='\t', header=0)
+        if df.empty or '#FILE' not in df.columns:
+            return "-"
+        # Filter to this sample and significant hits
+        hits = df[df['GENE'].notna()]['GENE'].tolist()
+        if not hits:
+            return "-"
+        return ';'.join(sorted(set(hits)))
+    except Exception as e:
+        return "Parse_error"
+
 def duplicate_column_clean(df):
     if len([x for x in list(df.columns) if list(df.columns).count(x) > 1]) > 0:
         #get column names that are duplicates
@@ -845,7 +861,7 @@ def get_novel_big5_alert(gamma_ar_file, big5_keep_extended, big5_oxa_keep):
     results = ', '.join(results)
     return results
 
-def Get_Metrics(phoenix_entry, scaffolds_entry, set_coverage, srst2_ar_df, pf_df, ar_df, hv_df, trim_stats, raw_stats, kraken_trim, kraken_trim_report, kraken_wtasmbld_report, kraken_wtasmbld, quast_report, busco_short_summary, asmbld_ratio, gc_file, sample_name, mlst_file, fairy_file, spades_fairy_file, gamma_ar_file, gamma_pf_file, gamma_hv_file, fast_ani_file, tax_file, srst2_file, ar_dic, ar_gene_thresholds, ar_db, BLDB):
+def Get_Metrics(phoenix_entry, scaffolds_entry, set_coverage, srst2_ar_df, pf_df, ar_df, hv_df, trim_stats, raw_stats, kraken_trim, kraken_trim_report, kraken_wtasmbld_report, kraken_wtasmbld, quast_report, busco_short_summary, asmbld_ratio, gc_file, sample_name, mlst_file, fairy_file, spades_fairy_file, gamma_ar_file, gamma_pf_file, gamma_hv_file, fast_ani_file, tax_file, srst2_file, ar_dic, ar_gene_thresholds, ar_db, BLDB, abricate_vfdb_file=None, abricate_pf_file=None):
     '''For each step to gather metrics try to find the file and if not then make all variables unknown'''
     try:
         Q30_R1_per, Q30_R2_per, Total_Raw_Seq_bp, Total_Raw_reads, Total_Trimmed_bp, Paired_Trimmed_reads, Total_Trimmed_reads, Trim_Q30_R1_percent, Trim_Q30_R2_percent = get_Q30(trim_stats, raw_stats)
@@ -922,6 +938,14 @@ def Get_Metrics(phoenix_entry, scaffolds_entry, set_coverage, srst2_ar_df, pf_df
         df = pd.DataFrame({'WGS_ID':[sample_name], 'No_HVGs_Found':['File not found'], 'HV_Database':['HV GAMMA file not found'] })
         df.index = [sample_name]
         hv_df = pd.concat([hv_df, df], axis=0, sort=True, ignore_index=False).fillna("")
+    try:
+        Virulence_Genes = Parse_Abricate(abricate_vfdb_file, sample_name)
+    except:
+        Virulence_Genes = 'Unknown'
+    try:
+        Plasmid_Abricate = Parse_Abricate(abricate_pf_file, sample_name)
+    except:
+        Plasmid_Abricate = 'Unknown'
     try:
         #handling for if srst2 quietly failed
         srst2_failure_checks = ["failed gene detection","No AR genes found"]

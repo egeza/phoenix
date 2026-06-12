@@ -171,8 +171,8 @@ workflow SRA {
             // Check each line in the file
             for (sraNumber in sraNumbers) {
                 // Check if it starts with "SRR"
-                if (!sraNumber.startsWith("SRR") & !sraNumber.startsWith("ERR")) {
-                    exit 1, "Invalid value in ${params.input_sra}. Only SRR numbers are allowed for --mode SRA, but found: $sraNumber"
+                if (!(sraNumber.startsWith("SRR") || sraNumber.startsWith("ERR") || sraNumber.startsWith("DRR"))) {
+                    exit 1, "Invalid accession in ${params.input_sra}. Only SRR/ERR/DRR accessions are allowed for --mode SRA, but found: $sraNumber"
                 }
             }
         }
@@ -228,8 +228,8 @@ workflow CDC_SRA {
             // Check each line in the file
             for (sraNumber in sraNumbers) {
                 // Check if it starts with "SRR"
-                if (!sraNumber.startsWith("SRR") & !sraNumber.startsWith("ERR")) {
-                    exit 1, "Invalid value in ${params.input_sra}. Only SRR numbers are allowed for --mode CDC_SRA, but found: $sraNumber"
+                if (!(sraNumber.startsWith("SRR") || sraNumber.startsWith("ERR") || sraNumber.startsWith("DRR"))) {
+                    exit 1, "Invalid accession in ${params.input_sra}. Only SRR/ERR/DRR accessions are allowed for --mode CDC_SRA, but found: $sraNumber"
                 }
             }
         }

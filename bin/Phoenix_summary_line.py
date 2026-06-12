@@ -113,6 +113,16 @@ def N50_Length(input_quast):
         String1 = f.readline()
     return N50
 
+def Longest_Contig(input_quast):
+    """Get the longest contig length from QUAST report."""
+    Longest = '0'
+    with open(input_quast, 'r') as f:
+        for line in f:
+            if 'Largest contig' in line:
+                Longest = line.split()[-1]
+                break
+    return Longest
+
 def GC_Content(input_quast):
     NGC = '0'
     f = open(input_quast, 'r')
@@ -394,6 +404,14 @@ def Isolate_Line(Taxa, fastani, ID, trimmed_counts, ratio_file, MLST_file, quast
     except:
         Contigs = 'Unknown'
     try:
+        N50 = N50_Length(quast_file)
+    except:
+        N50 = 'Unknown'
+    try:
+        Longest = Longest_Contig(quast_file)
+    except:
+        Longest = 'Unknown'
+    try:
         busco_line, lineage, busco_file = Get_BUSCO_Gene_Count(stats)
     except IndexError:
         busco_file = None
@@ -480,10 +498,10 @@ def Isolate_Line(Taxa, fastani, ID, trimmed_counts, ratio_file, MLST_file, quast
         phx_version = "BASE: "+str(old_phoenix_version) + "; " + "UPDATED: "+str(phx_version)
     if busco_file == None and extended_qc == False:
         print(shigapass_organism)
-        Line = ID  + '\t' + phx_version + '\t' + QC_Outcome + '\t' + warning_count + '\t'  + Coverage + '\t' + Genome_Length + '\t' + Ratio + '\t' + Contigs + '\t' + GC + '\t' + final_taxa + '\t' + taxa_source + '\t' + fastani_organism + '\t' + fastani_percent_match + '\t' + fastani_coverage + '\t' + shigapass_organism + '\t' + read_match + '\t' + scaffold_match + '\t' + MLST_scheme_1 + '\t' + MLST_type_1 + '\t' + MLST_scheme_2 + '\t' + MLST_type_2 + '\t' + Bla + '\t' + Non_Bla + '\t' + point_mutations_list + '\t' + HV + '\t' + plasmid_marker_list + '\t' + Reason
+        Line = ID  + '\t' + phx_version + '\t' + QC_Outcome + '\t' + warning_count + '\t'  + Coverage + '\t' + Genome_Length + '\t' + Ratio + '\t' + Contigs + '\t' + N50 + '\t' + Longest + '\t' + GC + '\t' + final_taxa + '\t' + taxa_source + '\t' + fastani_organism + '\t' + fastani_percent_match + '\t' + fastani_coverage + '\t' + shigapass_organism + '\t' + read_match + '\t' + scaffold_match + '\t' + MLST_scheme_1 + '\t' + MLST_type_1 + '\t' + MLST_scheme_2 + '\t' + MLST_type_2 + '\t' + Bla + '\t' + Non_Bla + '\t' + point_mutations_list + '\t' + HV + '\t' + plasmid_marker_list + '\t' + Reason
         busco = False
     elif busco_file is not None or extended_qc == True:
-        Line = ID + '\t' + phx_version + '\t' + QC_Outcome + '\t' + warning_count + '\t'  + Coverage + '\t' + Genome_Length + '\t' + Ratio + '\t' + Contigs + '\t' + GC + '\t' + busco_line + '\t' + lineage + '\t' + final_taxa + '\t' + taxa_source + '\t' + fastani_organism + '\t' + fastani_percent_match + '\t' + fastani_coverage + '\t' + shigapass_organism + '\t' + read_match + '\t' + scaffold_match + '\t' + MLST_scheme_1 + '\t' + MLST_type_1 + '\t' + MLST_scheme_2 + '\t' + MLST_type_2 + '\t' + Bla + '\t' + Non_Bla + '\t' + point_mutations_list + '\t' + HV + '\t' + plasmid_marker_list + '\t' + Reason
+        Line = ID + '\t' + phx_version + '\t' + QC_Outcome + '\t' + warning_count + '\t'  + Coverage + '\t' + Genome_Length + '\t' + Ratio + '\t' + Contigs + '\t' + N50 + '\t' + Longest + '\t' + GC + '\t' + busco_line + '\t' + lineage + '\t' + final_taxa + '\t' + taxa_source + '\t' + fastani_organism + '\t' + fastani_percent_match + '\t' + fastani_coverage + '\t' + shigapass_organism + '\t' + read_match + '\t' + scaffold_match + '\t' + MLST_scheme_1 + '\t' + MLST_type_1 + '\t' + MLST_scheme_2 + '\t' + MLST_type_2 + '\t' + Bla + '\t' + Non_Bla + '\t' + point_mutations_list + '\t' + HV + '\t' + plasmid_marker_list + '\t' + Reason
         busco = True
     return Line, busco, fastani
 
