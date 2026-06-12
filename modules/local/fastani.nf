@@ -20,7 +20,7 @@ process FASTANI {
     def container = task.container.toString() - "staphb/fastani@"
     """
     line=\$(head -n1 ${reference})
-    if [[ "\${line}" = "No MASH hit found" ]]; then
+    if [[ "\${line}" = "No MASH hit found" ]] || [[ -z "\${line}" ]]; then
         echo "Mash/FastANI Error: No MASH hit found" > ${prefix}.ani.txt
     else
         db_version=\$(echo ${reference} | sed 's/_best_MASH_hits.txt//' | sed 's/${prefix}_//' )
