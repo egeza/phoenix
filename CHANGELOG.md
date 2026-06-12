@@ -1,6 +1,33 @@
 # CDCgov/phoenix: Changelog
 
-Below are the list of changes to phx since is initial release. As fixes can take multiple commits to fix the linked commit are the point at which the fix was complete. Sometimes additional changes are needed later so commits give an approximate reference for the fix. Check commits on the specific file of interest if the commit link seems off. 
+Below are the list of changes to phx since is initial release. As fixes can take multiple commits to fix the linked commit are the point at which the fix was complete. Sometimes additional changes are needed later so commits give an approximate reference for the fix. Check commits on the specific file of interest if the commit link seems off.
+
+---
+
+## [egeza/phoenix custom] — based on v2.3.1 (06/12/2026)
+
+Custom enhancements added to [egeza/phoenix](https://github.com/egeza/phoenix) on top of CDCgov/phoenix v2.3.1.
+
+**New Features:**
+
+- **MIXED mode** (`--mode MIXED` / `--mode CDC_MIXED`): run local reads and NCBI SRA reads in a single pipeline run, producing one unified GRiPHin summary. See [docs/MIXED_MODE_USAGE.md](docs/MIXED_MODE_USAGE.md).
+- **DRR accession support**: `--input_sra` now accepts SRR (NCBI), ERR (ENA) and DRR (DDBJ) accessions in SRA, CDC_SRA, MIXED and CDC_MIXED modes.
+- **QUAST N50 and Longest Contig in summary**: two new columns (`N50`, `Longest_Contig`) added to `Phoenix_Summary.tsv` and GRiPHin Excel/TSV output.
+- **Abricate virulence genes for all samples**: Abricate is run on every sample — using the `ecoli_vf` database for *Escherichia* spp. and the `vfdb` database for all other organisms. Results appear as `Virulence_Genes` in GRiPHin.
+- **Abricate PlasmidFinder for all samples**: Abricate is run with the `plasmidfinder` database on every sample. Results appear as `Plasmid_Abricate` in GRiPHin, complementing GAMMA-based replicon detection.
+
+**Files changed:**
+
+- `main.nf` — MIXED/CDC_MIXED workflows; DRR validation in SRA/CDC_SRA modes
+- `modules/local/merge_samplesheets.nf` — new module to merge local + SRA samplesheets
+- `modules/local/abricate_summary.nf` — new module for `abricate --summary`
+- `workflows/phoenix.nf` — Abricate VFDB/ecoli_vf (all samples) and PlasmidFinder calls
+- `bin/Phoenix_summary_line.py` — N50 and Longest_Contig added to summary line
+- `bin/GRiPHin.py` — `Parse_Abricate()` function; `Virulence_Genes` and `Plasmid_Abricate` columns
+- `docs/CUSTOM_FEATURES.md` — full documentation of all custom features
+- `docs/MIXED_MODE_USAGE.md` — MIXED mode usage guide
+
+---
 
 ## [v1.0.0](https://github.com/CDCgov/phoenix/releases/tag/v1.0.0) (10/12/2022)
 

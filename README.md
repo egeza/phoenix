@@ -1,5 +1,11 @@
 # :fire::bird::fire: PHoeNIx: A short-read pipeline for healthcare-associated and antimicrobial resistant pathogens
 
+> **This is a customised fork** ([egeza/phoenix](https://github.com/egeza/phoenix)) of [CDCgov/phoenix](https://github.com/CDCgov/phoenix) **v2.3.1**, maintained for microbial genomics WGS analysis at AIMS.
+> Custom additions: MIXED mode (local + SRA reads), DRR accession support, QUAST N50/longest contig in summary, Abricate virulence (ecoli_vf / vfdb) and PlasmidFinder for all samples.
+> See [docs/CUSTOM_FEATURES.md](docs/CUSTOM_FEATURES.md) for full details and a tool version comparison with phoenix_v1 (v2.2.0).
+
+---
+
 PHoeNIx was built and is maintained by the CDC's [Division of Healthcare Quality Promotion (DHQP)](https://www.cdc.gov/ncezid/dhqp/index.html) to standardize genomic analysis of bacterial pathogens causing healthcare-associated infections, with a focus on antimicrobial resistance (AR). The pipeline supports the aims of the Antimicrobial Resistance Laboratory Network (AR Lab Network) to rapidly detect emerging and novel AR threats.  
 
 <!-- [![GitHub Downloads](https://img.shields.io/github/downloads/cdcgov/phoenix/total.svg?style=social[![GitHub Downloads](https://img.shields.io/github/downloads/CDCgov/phoenix/total.svg?style=social&logo=github&label=Download-) -->  

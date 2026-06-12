@@ -126,3 +126,11 @@ nextflow run egeza/phoenix \
 - All samples — regardless of source — go through identical QC, assembly, AMR and
   MLST steps, and appear together in the final GRiPHin Excel/TSV summary.
 - Internet access is required at runtime when `--input_sra` is used (for NCBI download).
+
+---
+
+## Other custom enhancements
+
+See [CUSTOM_FEATURES.md](CUSTOM_FEATURES.md) for documentation on all additional features
+in this fork: DRR accession support, QUAST N50/longest contig in summary, Abricate virulence
+(vfdb / ecoli_vf) and PlasmidFinder detection for all samples.
