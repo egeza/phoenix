@@ -163,7 +163,7 @@ workflow SRA {
     //input on command line
     if (params.input_sra) {
         //create channel input
-        ch_input = file(params.input_sra)
+        def ch_input = file(params.input_sra)
         //Check that SRR numbers are passed not SRX
         if (ch_input) {
             // Read the contents of the file
@@ -220,7 +220,7 @@ workflow CDC_SRA {
     //input on command line
     if (params.input_sra) {
         //create channel input
-        ch_input = file(params.input_sra)
+        def ch_input = file(params.input_sra)
         //Check that SRR numbers are passed not SRX
         if (ch_input) {
             // Read the contents of the file
