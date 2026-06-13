@@ -560,6 +560,12 @@ workflow PHOENIX_EXTERNAL {
         // Combine actual SHIGAPASS entries with backup empty entries and join with the original line_summary_ch
         line_summary_ch = line_summary_ch.join(shigapass_combined_ch, by: [0])
 
+        // Join abricate results (remainder: true so samples without hits still proceed)
+        line_summary_ch = line_summary_ch
+            .join(abricate_vfdb_ch.map{ meta, report -> [[id:meta.id], report] }, by: [0], remainder: true)
+            .join(abricate_plasmidfinder_ch.map{ meta, report -> [[id:meta.id], report] }, by: [0], remainder: true)
+            .map{ tuple -> tuple.collect{ it == null ? [] : it } }
+
         // Generate summary per sample that passed SPAdes
         CREATE_SUMMARY_LINE (
             line_summary_ch, false, workflow.manifest.version

@@ -19,7 +19,9 @@ process CREATE_SUMMARY_LINE {
         path(amr_report),
         path(fastani),
         path(shigapass),
-        val(old_software_version)
+        val(old_software_version),
+        path(abricate_vfdb),
+        path(abricate_pf)
     val(extended_qc)
     val(phx_version)
 
@@ -51,6 +53,8 @@ process CREATE_SUMMARY_LINE {
     
     // Shigapass needs careful joining because it might be a list or a single path
     def shigapass_file = (shigapass && shigapass.toString() != "[]") ? "--shigapass ${shigapass instanceof List ? shigapass.join(' ') : shigapass}" : ""
+    def abricate_vfdb_file = (abricate_vfdb && !(abricate_vfdb.toString() == "[]")) ? "--abricate_vfdb $abricate_vfdb" : ""
+    def abricate_pf_file   = (abricate_pf && !(abricate_pf.toString() == "[]")) ? "--abricate_pf $abricate_pf" : ""
 
     def container_version = "base_v2.2.0"
     def container = task.container.toString() - "quay.io/jvhagey/phoenix@"
@@ -71,6 +75,8 @@ process CREATE_SUMMARY_LINE {
         $wtasmbld_ksummary_file \\
         $trim_ksummary_file \\
         $shigapass_file \\
+        $abricate_vfdb_file \\
+        $abricate_pf_file \\
         --phx_version $phx_version \\
         $old_software_arg \\
         -o ${meta.id}_summaryline.tsv \\

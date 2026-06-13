@@ -3,6 +3,7 @@ process ABRICATE {
     label 'process_medium'
     // abricate v1.2.0
     container 'staphb/abricate@sha256:559c16a1817d53fe4ddbd68ff4810245cd501e15606bb38e5e0f85e5103b4860'
+    publishDir "${params.outdir}/${meta.id}/abricate", mode: params.publish_dir_mode, saveAs: { filename -> filename.equals('versions.yml') ? null : filename }
 
     input:
     tuple val(meta), path(fasta), val(db_name)
