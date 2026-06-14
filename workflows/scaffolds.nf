@@ -453,7 +453,8 @@ workflow SCAFFOLDS_EXTERNAL {
                     .map{ id, original_id, shigapass_file -> [id, shigapass_file ?: [], []]}  // If shigapass_file is null, use empty list, and add an empty list for the line summary to maintain the structure
 
         // Combine actual SHIGAPASS entries with backup empty entries and join with the original line_summary_ch
-        line_summary_ch = line_summary_ch.join(shigapass_combined_ch, by: [0]) 
+        line_summary_ch = line_summary_ch.join(shigapass_combined_ch, by: [0])
+            .map{ tuple -> tuple + [[], []] } // abricate_vfdb, abricate_pf placeholders
 
         // Generate summary per sample
         CREATE_SUMMARY_LINE (

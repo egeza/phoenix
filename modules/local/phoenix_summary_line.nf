@@ -20,8 +20,8 @@ process CREATE_SUMMARY_LINE {
         path(fastani),
         path(shigapass),
         val(old_software_version),
-        path(abricate_vfdb),
-        path(abricate_pf)
+        path(abricate_vfdb, optional: true),
+        path(abricate_pf, optional: true)
     val(extended_qc)
     val(phx_version)
 

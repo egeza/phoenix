@@ -564,7 +564,7 @@ workflow UPDATE_PHOENIX_WF {
         all_id_pairs_ch = line_summary_ch.join(shigapass_ch, by: [[0][0],[0][1]], remainder: true).filter{ it[1] != null }
             .map{ meta, fastp_total_qc, checked_MLSTs, gamma_hv, gamma, gamma_pf, quast_report, assembly_ratio, synopsis, taxonomy, k2_trimd_bh_summary, k2_wtasmbld_bh_summary, report, ani_best_hit, old_version, shigapass_file ->
             def sp = (shigapass_file == null || shigapass_file == []) ? [] : shigapass_file
-            return [meta, fastp_total_qc, checked_MLSTs, gamma_hv, gamma, gamma_pf, quast_report, assembly_ratio, synopsis, taxonomy, k2_trimd_bh_summary, k2_wtasmbld_bh_summary, report, ani_best_hit, sp, old_version]
+            return [meta, fastp_total_qc, checked_MLSTs, gamma_hv, gamma, gamma_pf, quast_report, assembly_ratio, synopsis, taxonomy, k2_trimd_bh_summary, k2_wtasmbld_bh_summary, report, ani_best_hit, sp, old_version, [], []]
             }
         // rename to line_summary_ch --> just to keep the naming consistent with the original workflow
         line_summary_ch_final = all_id_pairs_ch

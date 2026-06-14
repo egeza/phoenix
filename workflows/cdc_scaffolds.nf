@@ -481,6 +481,7 @@ workflow SCAFFOLDS_EXQC {
 
         // Combine actual SHIGAPASS entries with backup empty entries and join with the original line_summary_ch
         line_summary_ch = line_summary_ch.join(shigapass_combined_ch, by: [0])
+            .map{ tuple -> tuple + [[], []] } // abricate_vfdb, abricate_pf placeholders
 
         // Generate summary per sample that passed SPAdes
         CREATE_SUMMARY_LINE (
