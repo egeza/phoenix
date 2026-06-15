@@ -34,7 +34,7 @@ def create_deduped_ch(old_meta, reads, metadata_csv, dups){
             if (lines.size() > 1) {
                 def cols = lines[1].split(',')
                 if (cols.size() > 29 && cols[29]) {
-                    meta.id = cols[29].replaceAll(" ", "_").replaceAll("/", "_")
+                    meta.id = cols[29].replaceAll(/[^a-zA-Z0-9_\-]/, "_")
                 } else {
                     throw new IndexOutOfBoundsException("Missing SampleName column")
                 }
@@ -64,7 +64,7 @@ def check_for_dups(metadata_csvs) {
             if (lines.size() > 1) {
                 def cols = lines[1].split(',')
                 if (cols.size() > 29 && cols[29]) {
-                    sample_name = cols[29].replaceAll(" ", "_").replaceAll("/", "_")
+                    sample_name = cols[29].replaceAll(/[^a-zA-Z0-9_\-]/, "_")
                 } else {
                     throw new IndexOutOfBoundsException("Missing SampleName column")
                 }

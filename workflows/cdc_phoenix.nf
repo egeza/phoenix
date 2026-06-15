@@ -603,12 +603,12 @@ workflow PHOENIX_EXQC {
         // Check to see if the any isolates are Clostridioides difficile - set centar_var to true if it is, otherwise false
         // This is used to double check params.centar to ensure that griphin parameters are set correctly
         //collect all taxa and one by one count the number of c diff. then collect and get the sum to compare to 0
-        centar_boolean = DETERMINE_TAXA_ID.out.taxonomy.map{ it -> get_only_taxa(it) }.collect().flatten().count{ it -> it == "Clostridioides"}.collect().sum().map{ it -> it[0] > 0 }
+        centar_boolean = DETERMINE_TAXA_ID.out.taxonomy.map{ it -> get_only_taxa(it) }.collect().flatten().count{ it -> it == "Clostridioides"}.map{ it -> it > 0 }
         // Now we need to check if --centar was passed, In this case it is centar entry and therefore would be true
         centar_var = centar_boolean.map{ it -> check_params_var(it, centar_param)}
         //pull in species specific files - use function to get taxa name, collect all taxa and one by one count the number of e. coli or shigella. then collect and get the sum to compare to 0
         shigapass_var = CHECK_SHIGAPASS_TAXA.out.tax_file.concat(DETERMINE_TAXA_ID.out.taxonomy).unique{ meta, file-> [meta.id] }
-                            .map{it -> get_only_taxa(it)}.collect().flatten().count{ it -> it.contains("Escherichia") || it.contains("Shigella")}.collect().sum().map{ it -> it[0] > 0 }
+                            .map{it -> get_only_taxa(it)}.collect().flatten().count{ it -> it.contains("Escherichia") || it.contains("Shigella")}.map{ it -> it > 0 }
 
         fairy_files_ch = SCAFFOLD_COUNT_CHECK.out.outcome.concat(SPADES_WF.out.fairy_outcome).concat(SPADES_WF.out.spades_outcome)
                             .concat(GET_TRIMD_STATS.out.outcome).concat(GET_RAW_STATS.out.outcome).concat(CORRUPTION_CHECK.out.outcome)

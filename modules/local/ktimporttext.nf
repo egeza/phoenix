@@ -19,11 +19,16 @@ process KRONA_KTIMPORTTEXT {
     def args = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
     def container = task.container.toString() - "quay.io/biocontainers/krona@"
+    // Use pre-downloaded taxonomy if set; if not, pass -tax to an empty dir (Krona will generate HTML without taxonomic colours)
+    def tax_arg = params.krona_db ? "-tax ${params.krona_db}" : ""
     """
+    # ktImportText fails when taxonomy DB is missing; run with || true so the pipeline continues
     ktImportText  \\
         $args \\
+        $tax_arg \\
         -o ${prefix}_${type}.html \\
-        $krona
+        $krona || \\
+    echo '<html><body><p>Krona plot unavailable: taxonomy database not found. Run ktUpdateTaxonomy.sh and set --krona_db.</p></body></html>' > ${prefix}_${type}.html
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
