@@ -56,6 +56,7 @@ include { FORMAT_ANI                     } from '../modules/local/format_ANI_bes
 include { DETERMINE_TAXA_ID              } from '../modules/local/determine_taxa_id'
 include { SHIGAPASS                      } from '../modules/local/shigapass'
 include { CHECK_SHIGAPASS_TAXA           } from '../modules/local/check_shigapass_taxa'
+include { KLEBORATE                      } from '../modules/local/kleborate'
 include { PROKKA                         } from '../modules/local/prokka'
 include { GET_TAXA_FOR_AMRFINDER         } from '../modules/local/get_taxa_for_amrfinder'
 include { AMRFINDERPLUS_RUN              } from '../modules/local/run_amrfinder'
@@ -432,6 +433,19 @@ workflow PHOENIX_EXQC {
         )
         ch_versions = ch_versions.mix(CHECK_SHIGAPASS_TAXA.out.versions)
 
+        ////////////////////////////////////// KLEBORATE //////////////////////////////////////
+        // Run Kleborate on Klebsiella samples (KPSC profile; -p kpsc covers K. pneumoniae SC)
+        kleborate_taxa_ch = DETERMINE_TAXA_ID.out.taxonomy.map{it -> get_taxa(it)}.filter{it, meta, taxonomy -> it.contains("Klebsiella")}.map{get_taxa_output, meta, taxonomy -> [[id:meta.id], taxonomy ]}
+            .join(BBMAP_REFORMAT.out.filtered_scaffolds.map{                                  meta, filtered_scaffolds -> [[id:meta.id], filtered_scaffolds]}, by: [0])
+            .join(SCAFFOLD_COUNT_CHECK.out.outcome.splitCsv(strip:true, by:5).map{            meta, fairy_outcome      -> [meta, [fairy_outcome[0][0], fairy_outcome[1][0], fairy_outcome[2][0], fairy_outcome[3][0], fairy_outcome[4][0]]]}, by: [0])
+            .filter { meta, taxonomy, filtered_scaffolds, fairy_outcome -> fairy_outcome[4] == "PASSED: More than 0 scaffolds in ${meta.id} after filtering."}
+            .map{ meta, taxonomy, filtered_scaffolds, fairy_outcome -> return [meta, filtered_scaffolds ] }
+
+        KLEBORATE (
+            kleborate_taxa_ch
+        )
+        ch_versions = ch_versions.mix(KLEBORATE.out.versions)
+
         ////////////////////////////////////// PHOENIX //////////////////////////////////////
         // Perform MLST steps on isolates (with srst2 on internal samples)
         DO_MLST (
@@ -609,6 +623,7 @@ workflow PHOENIX_EXQC {
         //pull in species specific files - use function to get taxa name, collect all taxa and one by one count the number of e. coli or shigella. then collect and get the sum to compare to 0
         shigapass_var = CHECK_SHIGAPASS_TAXA.out.tax_file.concat(DETERMINE_TAXA_ID.out.taxonomy).unique{ meta, file-> [meta.id] }
                             .map{it -> get_only_taxa(it)}.collect().flatten().count{ it -> it.contains("Escherichia") || it.contains("Shigella")}.map{ it -> it > 0 }
+        kleborate_var = DETERMINE_TAXA_ID.out.taxonomy.map{ it -> get_only_taxa(it) }.collect().flatten().count{ it -> it.contains("Klebsiella")}.map{ it -> it > 0 }
 
         fairy_files_ch = SCAFFOLD_COUNT_CHECK.out.outcome.concat(SPADES_WF.out.fairy_outcome).concat(SPADES_WF.out.spades_outcome)
                             .concat(GET_TRIMD_STATS.out.outcome).concat(GET_RAW_STATS.out.outcome).concat(CORRUPTION_CHECK.out.outcome)

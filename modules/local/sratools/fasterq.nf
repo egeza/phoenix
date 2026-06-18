@@ -25,8 +25,17 @@ process SRATOOLS_FASTERQDUMP {
         --threads $task.cpus \\
         ${srr_number}
 
-    gzip ${srr_number}_1.fastq
-    gzip ${srr_number}_2.fastq
+    if [[ -f "${srr_number}_1.fastq" && -f "${srr_number}_2.fastq" ]]; then
+        gzip ${srr_number}_1.fastq
+        gzip ${srr_number}_2.fastq
+    elif [[ -f "${srr_number}.fastq" ]]; then
+        echo "ERROR: ${srr_number} produced a single unsplit fastq file, meaning it is single-end (or interleaved) data." >&2
+        echo "PHoeNIx requires paired-end Illumina reads (R1/R2). This SRA accession cannot be processed by this pipeline." >&2
+        exit 1
+    else
+        echo "ERROR: fasterq-dump did not produce the expected output file(s) for ${srr_number}." >&2
+        exit 1
+    fi
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
